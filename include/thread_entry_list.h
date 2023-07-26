@@ -95,6 +95,16 @@ namespace lu {
             Entry *current_;
         };
 
+        template <class Destructor>
+        class EntryHolder {
+            explicit EntryHolder(Destructor &destructor)
+                    : destructor_(destructor) {}
+
+        private:
+            Entry *entry_;
+            Destructor destructor_;
+        };
+
     public:
         using iterator = Iterator;
 
@@ -129,6 +139,9 @@ namespace lu {
         }
 
         void releaseEntry(Entry *entry) const {
+            if (entry == nullptr) {
+                return;
+            }
             entry->active_.store(false);
         }
 
