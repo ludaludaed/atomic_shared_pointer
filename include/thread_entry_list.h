@@ -2,38 +2,59 @@
 // Created by ludaludaed on 25.07.2023.
 //
 
-#ifndef ATOMIC_SHARED_POINTER_THREAD_BLOCK_LIST_H
-#define ATOMIC_SHARED_POINTER_THREAD_BLOCK_LIST_H
+#ifndef ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H
+#define ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H
 
 #include <memory>
 #include "utils.h"
 
 namespace lu {
     template <class TValue, class Allocator = std::allocator<TValue>>
-    class ThreadBlockList {
+    class ThreadEntryList {
     public:
         class Entry {
-            friend class ThreadBlockList;
+            friend class ThreadEntryList;
 
             friend class Iterator;
 
-        public:
+        private:
             Entry() = default;
+
+        public:
+            Entry(const Entry &) = delete;
+
+            Entry(Entry &&) = delete;
+
+            Entry &operator=(const Entry &) = delete;
+
+            Entry &operator=(Entry &&) = delete;
+
+            void release() {
+                active_.store(false, std::memory_order_release);
+            }
 
             bool isActive() const {
                 return active_.load(std::memory_order_relaxed);
             }
 
+            TValue &value() {
+                return value_;
+            }
+
+            const TValue &value() const {
+                return value_;
+            }
+
         private:
-            TValue value_;
-            Entry *next_;
+            TValue value_{};
+            Entry *next_{nullptr};
             std::atomic<bool> active_{true};
         };
 
         class Iterator {
         public:
             using iterator_category = std::forward_iterator_tag;
-            using value_type = TValue;
+            using value_type = Entry;
             using difference_type = std::ptrdiff_t;
             using reference = value_type &;
             using pointer = value_type *;
@@ -44,11 +65,11 @@ namespace lu {
             explicit Iterator(Entry *current) : current_(current) {}
 
             reference operator*() const {
-                return current_->value_;
+                return *current_;
             }
 
             pointer operator->() const {
-                return &current_->value_;
+                return &current_;
             }
 
             Iterator &operator++() {
@@ -82,36 +103,26 @@ namespace lu {
         using AllocatorTraits = std::allocator_traits<InternalAllocator>;
 
     public:
-        ThreadBlockList() = default;
+        ThreadEntryList() = default;
 
-        explicit ThreadBlockList(Allocator &allocator) : allocator_(allocator) {}
+        explicit ThreadEntryList(Allocator &allocator) : allocator_(allocator) {}
 
-        ThreadBlockList(const ThreadBlockList &) = delete;
+        ThreadEntryList(const ThreadEntryList &) = delete;
 
-        ThreadBlockList(ThreadBlockList &&) = delete;
+        ThreadEntryList(ThreadEntryList &&) = delete;
 
-        ThreadBlockList &operator=(const ThreadBlockList &) = delete;
+        ThreadEntryList &operator=(const ThreadEntryList &) = delete;
 
-        ThreadBlockList &operator=(ThreadBlockList &&) = delete;
+        ThreadEntryList &operator=(ThreadEntryList &&) = delete;
 
-        ~ThreadBlockList() {
+        ~ThreadEntryList() {
             clear();
-        }
-
-        void clear() {
-            Entry *current = head_.exchange(nullptr);
-            while (current != nullptr) {
-                Entry *del_entry = current;
-                current = current->next_;
-                del_entry->~Entry();
-                AllocatorTraits::deallocate(allocator_, del_entry, 1);
-            }
         }
 
         Entry *acquireEntry() {
             Entry *acquired_entry = findFree();
             if (acquired_entry == nullptr) {
-                acquired_entry = acquireEntry();
+                acquired_entry = allocItem();
                 internalPush(acquired_entry);
             }
             return acquired_entry;
@@ -130,7 +141,7 @@ namespace lu {
         }
 
     private:
-        Entry *allocEntry() const {
+        Entry *allocItem() const {
             AllocateGuard<InternalAllocator> al(allocator_);
             al.allocate();
             al.construct();
@@ -155,9 +166,19 @@ namespace lu {
             return nullptr;
         }
 
+        void clear() {
+            Entry *current = head_.exchange(nullptr);
+            while (current != nullptr) {
+                Entry *del_entry = current;
+                current = current->next_;
+                del_entry->Entry();
+                AllocatorTraits::deallocate(allocator_, del_entry, 1);
+            }
+        }
+
     private:
         InternalAllocator allocator_;
         std::atomic<Entry *> head_{nullptr};
     };
 } // namespace lu
-#endif //ATOMIC_SHARED_POINTER_THREAD_BLOCK_LIST_H
+#endif //ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H
