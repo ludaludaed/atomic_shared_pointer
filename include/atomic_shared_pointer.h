@@ -75,7 +75,7 @@ namespace lu {
         using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock>;
 
     public:
-        explicit ControlBlock(TValue *value, Deleter &deleter = Deleter{}, const Allocator &allocator = Allocator{})
+        explicit ControlBlock(TValue *value, Deleter deleter = Deleter{}, const Allocator &allocator = Allocator{})
                 : ControlBlockBase(),
                   value_(value),
                   deleter_(std::move(deleter)),
@@ -190,13 +190,13 @@ namespace lu {
         }
 
         template <class TTValue, class Deleter, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
-        SharedPtr(TTValue *value, Deleter &deleter) {
-            construct(value, deleter);
+        SharedPtr(TTValue *value, Deleter deleter) {
+            construct(value, std::move(deleter));
         }
 
         template <class TTValue, class Deleter, class Allocator, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
-        SharedPtr(TTValue *value, Deleter &deleter, Allocator &allocator) {
-            construct(value, deleter, allocator);
+        SharedPtr(TTValue *value, Deleter deleter, Allocator &allocator) {
+            construct(value, std::move(deleter), allocator);
         }
 
         SharedPtr(const SharedPtr &other)
@@ -284,8 +284,8 @@ namespace lu {
         }
 
         template <class TTValue, class Deleter, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
-        void reset(TTValue *value, Deleter &deleter) {
-            SharedPtr temp(value, deleter);
+        void reset(TTValue *value, Deleter deleter) {
+            SharedPtr temp(value, std::move(deleter));
             swap(temp);
         }
 
@@ -347,13 +347,13 @@ namespace lu {
 
     private:
         template <class TTValue, class Deleter = DefaultDeleter, class Allocator = std::allocator<TTValue>>
-        void construct(TTValue *value, const Deleter &deleter = Deleter{}, const Allocator &allocator = Allocator{}) {
+        void construct(TTValue *value, Deleter deleter = Deleter{}, const Allocator &allocator = Allocator{}) {
             using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock<TTValue, Deleter, Allocator>>;
             DeleterGuard guard(value, deleter);
             InternalAllocator internal_allocator(allocator);
             AllocateGuard allocation(internal_allocator);
             allocation.allocate();
-            allocation.construct(value, const_cast<Deleter &>(deleter), allocator);
+            allocation.construct(value, std::move(deleter), allocator);
             setPointers(value, allocation.release());
             guard.release();
         }

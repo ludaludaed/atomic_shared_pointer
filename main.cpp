@@ -26,6 +26,6 @@ int main() {
 
     lu::SharedPtr<int> sp;
     TestDeleter deleter;
-    sp.reset(new int(), deleter);
+    sp.reset(new int(), std::move(deleter));
     return 0;
 }
