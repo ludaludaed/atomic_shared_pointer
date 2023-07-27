@@ -191,12 +191,12 @@ namespace lu {
 
         template <class TTValue, class Deleter, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         SharedPtr(TTValue *value, Deleter &deleter) {
-            construct(value, std::move(deleter));
+            construct(value, deleter);
         }
 
         template <class TTValue, class Deleter, class Allocator, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         SharedPtr(TTValue *value, Deleter &deleter, Allocator &allocator) {
-            construct(value, std::move(deleter), allocator);
+            construct(value, deleter, allocator);
         }
 
         SharedPtr(const SharedPtr &other)
@@ -242,24 +242,28 @@ namespace lu {
         }
 
         SharedPtr &operator=(const SharedPtr &other) {
-            swap(SharedPtr(other));
+            SharedPtr temp(other);
+            swap(temp);
             return *this;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         SharedPtr &operator=(const SharedPtr<TTValue> &other) {
-            swap(SharedPtr(other));
+            SharedPtr temp(other);
+            swap(temp);
             return *this;
         }
 
         SharedPtr &operator=(SharedPtr &&other) noexcept {
-            swap(SharedPtr(std::move(other)));
+            SharedPtr temp(std::move(other));
+            swap(temp);
             return *this;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         SharedPtr &operator=(SharedPtr<TTValue> &&other) {
-            swap(SharedPtr(std::move(other)));
+            SharedPtr temp(std::move(other));
+            swap(temp);
             return *this;
         }
 
@@ -269,22 +273,26 @@ namespace lu {
         }
 
         void reset() {
-            SharedPtr().swap(*this);
+            SharedPtr temp;
+            swap(temp);
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         void reset(TTValue *value) {
-            swap(SharedPtr(value));
+            SharedPtr temp(value);
+            swap(temp);
         }
 
         template <class TTValue, class Deleter, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         void reset(TTValue *value, Deleter &deleter) {
-            swap(SharedPtr(value, deleter));
+            SharedPtr temp(value, deleter);
+            swap(temp);
         }
 
         template <class TTValue, class Deleter, class Allocator, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         void reset(TTValue *value, Deleter &deleter, Allocator &allocator) {
-            swap(SharedPtr(value, deleter, allocator));
+            SharedPtr temp(value, deleter, allocator);
+            swap(temp);
         }
 
         explicit operator bool() const {
@@ -339,13 +347,13 @@ namespace lu {
 
     private:
         template <class TTValue, class Deleter = DefaultDeleter, class Allocator = std::allocator<TTValue>>
-        void construct(TTValue *value, Deleter &deleter = {}, Allocator &allocator = {}) {
-            using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock>;
+        void construct(TTValue *value, const Deleter &deleter = Deleter{}, const Allocator &allocator = Allocator{}) {
+            using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock<TTValue, Deleter, Allocator>>;
             DeleterGuard guard(value, deleter);
             InternalAllocator internal_allocator(allocator);
             AllocateGuard allocation(internal_allocator);
             allocation.allocate();
-            allocation.construct(value, std::move(deleter), allocator);
+            allocation.construct(value, const_cast<Deleter &>(deleter), allocator);
             setPointers(value, allocation.release());
             guard.release();
         }
@@ -446,35 +454,41 @@ namespace lu {
         }
 
         WeakPtr &operator=(const WeakPtr &other) {
-            swap(WeakPtr(other));
+            WeakPtr temp(other);
+            swap(temp);
             return *this;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         WeakPtr &operator=(const WeakPtr<TTValue> &other) {
-            swap(WeakPtr(other));
+            WeakPtr temp(other);
+            swap(temp);
             return *this;
         }
 
         WeakPtr &operator=(WeakPtr &&other) noexcept {
-            swap(WeakPtr(std::move(other)));
+            WeakPtr temp(std::move(other));
+            swap(temp);
             return *this;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         WeakPtr &operator=(WeakPtr<TTValue> &&other) {
-            swap(WeakPtr(std::move(other)));
+            WeakPtr temp(std::move(other));
+            swap(temp);
             return *this;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         WeakPtr &operator=(const SharedPtr<TTValue> &other) {
-            swap(WeakPtr(other));
+            WeakPtr temp(other);
+            swap(temp);
             return *this;
         }
 
         void reset() {
-            swap(WeakPtr());
+            WeakPtr temp;
+            swap(temp);
         }
 
         void swap(WeakPtr &other) {
