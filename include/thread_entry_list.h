@@ -95,16 +95,6 @@ namespace lu {
             Entry *current_;
         };
 
-        template <class Destructor>
-        class EntryHolder {
-            explicit EntryHolder(Destructor &destructor)
-                    : destructor_(destructor) {}
-
-        private:
-            Entry *entry_;
-            Destructor destructor_;
-        };
-
     public:
         using iterator = Iterator;
 
@@ -154,27 +144,27 @@ namespace lu {
         }
 
     private:
-        Entry *allocItem() const {
-            AllocateGuard<InternalAllocator> al(allocator_);
+        Entry *allocItem() {
+            AllocateGuard al(allocator_);
             al.allocate();
-            al.construct();
+            ::new(al.ptr()) Entry();
             return al.release();
         }
 
         void internalPush(Entry *node) {
             Entry *head = head_.load();
             do {
-                node->next = head;
+                node->next_ = head;
             } while (head_.compare_exchange_strong(head, node));
         }
 
         Entry *findFree() const {
             Entry *current = head_.load();
             while (current != nullptr) {
-                if (!current->active.exchange(true)) {
+                if (!current->active_.exchange(true)) {
                     return current;
                 }
-                current = current->next;
+                current = current->next_;
             }
             return nullptr;
         }
@@ -184,7 +174,7 @@ namespace lu {
             while (current != nullptr) {
                 Entry *del_entry = current;
                 current = current->next_;
-                del_entry->Entry();
+                del_entry->~Entry();
                 AllocatorTraits::deallocate(allocator_, del_entry, 1);
             }
         }
@@ -192,6 +182,66 @@ namespace lu {
     private:
         InternalAllocator allocator_;
         std::atomic<Entry *> head_{nullptr};
+    };
+
+    template <class TValue, class Destructor = DefaultDestructor, class Allocator = std::allocator<TValue>>
+    class EntriesHolder {
+        friend class EntryHolder;
+
+        class EntryHolder {
+            friend class EntriesHolder;
+
+        private:
+            explicit EntryHolder(EntriesHolder &holder) : holder_(holder) {};
+
+        public:
+            EntryHolder(const EntryHolder &) = delete;
+
+            EntryHolder(EntryHolder &&) = delete;
+
+            EntryHolder &operator=(const EntryHolder &) = delete;
+
+            EntryHolder &operator=(EntryHolder &&) = delete;
+
+            ~EntryHolder() {
+                if (entry_ != nullptr) {
+                    holder_.destructor_(&entry_->value());
+                    entry_->release();
+                }
+            }
+
+            TValue &operator*() {
+                if (entry_ == nullptr) {
+                    entry_ = holder_.list_.acquireEntry();
+                }
+                return entry_->value();
+            }
+
+        private:
+            ThreadEntryList<TValue, Allocator>::Entry *entry_;
+            EntriesHolder &holder_;
+        };
+
+    public:
+        EntriesHolder() = default;
+
+        explicit EntriesHolder(Destructor destructor, const Allocator &allocator = Allocator{})
+                : destructor_(std::move(destructor)), list_(allocator) {}
+
+        TValue &getValue() {
+            EntryHolder &holder = getHolder();
+            return *holder;
+        }
+
+    private:
+        EntryHolder &getHolder() {
+            thread_local EntryHolder instance(*this);
+            return instance;
+        }
+
+    private:
+        Destructor destructor_;
+        ThreadEntryList<TValue, Allocator> list_;
     };
 } // namespace lu
 #endif //ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H
