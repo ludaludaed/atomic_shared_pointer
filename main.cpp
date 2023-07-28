@@ -6,9 +6,11 @@
 #include <vector>
 
 int main() {
-    lu::EntriesHolder<int> h;
+    {
+        lu::EntriesHolder<int> h;
 
-    h.getValue() = 10;
+        h.getValue() = 10;
+    }
 
     lu::EntriesHolder<int> h2;
 

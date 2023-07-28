@@ -192,7 +192,7 @@ namespace lu {
             friend class EntriesHolder;
 
         private:
-            explicit EntryHolder(EntriesHolder &holder) : holder_(holder) {};
+            EntryHolder() = default;
 
         public:
             EntryHolder(const EntryHolder &) = delete;
@@ -205,43 +205,42 @@ namespace lu {
 
             ~EntryHolder() {
                 if (entry_ != nullptr) {
-                    holder_.destructor_(&entry_->value());
+                    Destructor destructor;
+                    destructor(&entry_->value());
                     entry_->release();
                 }
             }
 
             TValue &operator*() {
                 if (entry_ == nullptr) {
-                    entry_ = holder_.list_.acquireEntry();
+                    entry_ = list_.acquireEntry();
                 }
                 return entry_->value();
             }
 
         private:
             ThreadEntryList<TValue, Allocator>::Entry *entry_;
-            EntriesHolder &holder_;
         };
 
     public:
         EntriesHolder() = default;
 
-        explicit EntriesHolder(Destructor destructor, const Allocator &allocator = Allocator{})
-                : destructor_(std::move(destructor)), list_(allocator) {}
-
         TValue &getValue() {
-            EntryHolder &holder = getHolder();
+            EntryHolder & holder = getHolder();
             return *holder;
         }
 
     private:
         EntryHolder &getHolder() {
-            thread_local EntryHolder instance(*this);
+            thread_local EntryHolder instance;
             return instance;
         }
 
     private:
-        Destructor destructor_;
-        ThreadEntryList<TValue, Allocator> list_;
+        static ThreadEntryList<TValue, Allocator> list_;
     };
+
+    template <class TValue, class Destructor, class Allocator>
+    ThreadEntryList<TValue, Allocator> EntriesHolder<TValue, Destructor, Allocator>::list_ = {};
 } // namespace lu
 #endif //ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H
