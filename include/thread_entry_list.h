@@ -188,6 +188,10 @@ namespace lu {
     class EntriesHolder {
         friend class EntryHolder;
 
+    public:
+        using Entry = ThreadEntryList<TValue, Allocator>::Entry;
+        using iterator = ThreadEntryList<TValue, Allocator>::iterator;
+    private:
         class EntryHolder {
             friend class EntriesHolder;
 
@@ -211,11 +215,18 @@ namespace lu {
                 }
             }
 
-            TValue &operator*() {
+            TValue &getValue() {
                 if (entry_ == nullptr) {
                     entry_ = list_.acquireEntry();
                 }
                 return entry_->value();
+            }
+
+            Entry &getEntry() {
+                if (entry_ == nullptr) {
+                    entry_ = list_.acquireEntry();
+                }
+                return &entry_;
             }
 
         private:
@@ -227,7 +238,20 @@ namespace lu {
 
         TValue &getValue() {
             EntryHolder & holder = getHolder();
-            return *holder;
+            return holder.getValue();
+        }
+
+        Entry &getEntry() {
+            EntryHolder & holder = getHolder();
+            return holder.getEntry();
+        }
+
+        iterator begin() {
+            return list_.begin();
+        }
+
+        iterator end() {
+            return list_.end();
         }
 
     private:
