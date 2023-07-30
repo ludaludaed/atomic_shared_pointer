@@ -87,6 +87,16 @@ namespace lu {
             return value_;
         }
 
+        static ControlBlock *create(TValue *value, Deleter deleter, const Allocator &allocator) {
+            DeleterGuard guard(value, deleter);
+            InternalAllocator internal_allocator(allocator);
+            AllocateGuard allocation(internal_allocator);
+            allocation.allocate();
+            allocation.construct(value, std::move(deleter), allocator);
+            guard.release();
+            return allocation.release();
+        }
+
     private:
         void destroy() override {
             deleter_(value_);
@@ -105,32 +115,37 @@ namespace lu {
         InternalAllocator allocator_;
     };
 
-    template <class TValue, class Destructor = DefaultDestructor, class Allocator = std::allocator<TValue>>
+    template <class TValue, class Allocator = std::allocator<TValue>>
     class InplaceControlBlock : public ControlBlockBase {
     private:
         using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<InplaceControlBlock>;
 
     public:
-        explicit InplaceControlBlock(Destructor destructor = Destructor{}, const Allocator &allocator = Allocator{})
+        template <class... Args>
+        explicit InplaceControlBlock(const Allocator &allocator, Args &&... args)
                 : ControlBlockBase(),
-                  destructor_(std::move(destructor)),
+                  value_(std::forward<Args>(args)...),
                   allocator_(allocator) {
         }
 
         ~InplaceControlBlock() override = default;
 
-        template <class... Args>
-        void construct(Args &&... args) {
-            value_.construct(std::forward<Args>(args)...);
-        }
-
         void *get() override {
             return &value_;
         }
 
+        template <class... Args>
+        static InplaceControlBlock *create(const Allocator &allocator, Args &&... args) {
+            InternalAllocator internal_allocator(allocator);
+            AllocateGuard allocation(internal_allocator);
+            allocation.allocate();
+            allocation.construct(allocator, std::forward<Args>(args)...);
+            return allocation.release();
+        }
+
     private:
         void destroy() override {
-            destructor_(&value_);
+            value_.~TValue();
         }
 
         void deleteThis() override {
@@ -141,8 +156,7 @@ namespace lu {
         }
 
     private:
-        AlignStorage<TValue> value_;
-        Destructor destructor_;
+        TValue value_;
         InternalAllocator allocator_;
     };
 
@@ -154,11 +168,11 @@ namespace lu {
 
     template <class TValue>
     class SharedPtr {
-        template <class TTValue, class ...Args>
-        friend SharedPtr<TTValue> makeShared(Args &&... args);
-
         template <class TTValue, class Allocator, class ...Args>
         friend SharedPtr<TTValue> allocateShared(const Allocator &allocator, Args &&... args);
+
+        template <class TTValue, class ...Args>
+        friend SharedPtr<TTValue> makeShared(Args &&... args);
 
         template <class TTValue>
         friend
@@ -348,14 +362,9 @@ namespace lu {
     private:
         template <class TTValue, class Deleter = DefaultDeleter, class Allocator = std::allocator<TTValue>>
         void construct(TTValue *value, Deleter deleter = Deleter{}, const Allocator &allocator = Allocator{}) {
-            using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock<TTValue, Deleter, Allocator>>;
-            DeleterGuard guard(value, deleter);
-            InternalAllocator internal_allocator(allocator);
-            AllocateGuard allocation(internal_allocator);
-            allocation.allocate();
-            allocation.construct(value, std::move(deleter), allocator);
-            setPointers(value, allocation.release());
-            guard.release();
+            using ControlBlock = ControlBlock<TTValue, Deleter, Allocator>;
+            auto control_block = ControlBlock::create(value, std::move(deleter), allocator);
+            setPointers(value, control_block);
         }
 
         template <class TTValue>
@@ -369,31 +378,19 @@ namespace lu {
         TValue *value_{nullptr};
     };
 
-    template <class TValue, class... Args>
-    SharedPtr<TValue> makeShared(Args &&... args) {
+    template <class TValue, class Allocator, class ...Args>
+    SharedPtr<TValue> allocateShared(const Allocator &allocator, Args &&... args) {
+        using ControlBlock = InplaceControlBlock<TValue, Allocator>;
+        auto control_block = ControlBlock::create(allocator, std::forward<Args>(args)...);
         SharedPtr<TValue> result;
-        auto *control_block = new InplaceControlBlock<TValue>();
-        control_block->construct(std::forward<Args>(args)...);
         result.setPointers(reinterpret_cast<TValue *>(control_block->get()), control_block);
         return std::move(result);
     }
 
-    template <class TValue, class Allocator, class ...Args>
-    SharedPtr<TValue> allocateShared(const Allocator &allocator, Args &&... args) {
-        using InternalAllocator = typename std::allocator_traits<Allocator>::template
-        rebind_alloc<InplaceControlBlock<TValue, DefaultDestructor, Allocator>>;
-        SharedPtr<TValue> result;
-        InternalAllocator internal_allocator(allocator);
-        AllocateGuard allocation(internal_allocator);
-        allocation.allocate();
-        allocation.construct(DefaultDestructor{}, allocator);
-
-        allocation.ptr()->construct(std::forward<Args>(args)...);
-        result.setPointers(reinterpret_cast<TValue *>(allocation.ptr()->get()), allocation.ptr());
-        allocation.release();
-        return result;
+    template <class TValue, class... Args>
+    SharedPtr<TValue> makeShared(Args &&... args) {
+        return std::move(allocateShared<TValue>(std::allocator<TValue>{}, std::forward<Args>(args)...));
     }
-
 
     template <class TValue>
     class WeakPtr {

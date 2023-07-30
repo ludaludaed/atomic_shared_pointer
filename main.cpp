@@ -6,14 +6,8 @@
 #include <vector>
 
 int main() {
-    {
-        lu::EntriesHolder<int> h;
-
-        h.getValue() = 10;
-    }
-
-    lu::EntriesHolder<int> h2;
-
-    std::cout << h2.getValue();
+    using namespace lu;
+    SharedPtr<int> sp = makeShared<int>(10);
+    std::cout << *sp;
     return 0;
 }
