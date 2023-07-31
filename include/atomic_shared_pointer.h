@@ -75,7 +75,7 @@ namespace lu {
         using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock>;
 
     public:
-        explicit ControlBlock(TValue *value, Deleter deleter = Deleter{}, const Allocator &allocator = Allocator{})
+        explicit ControlBlock(TValue *value, Deleter deleter, const Allocator &allocator)
                 : ControlBlockBase(),
                   value_(value),
                   deleter_(std::move(deleter)),
