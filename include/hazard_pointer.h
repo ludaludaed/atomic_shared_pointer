@@ -5,38 +5,105 @@
 #ifndef ATOMIC_SHARED_POINTER_HAZARD_POINTER_H
 #define ATOMIC_SHARED_POINTER_HAZARD_POINTER_H
 
+#include <bitset>
 #include <cassert>
+#include <algorithm>
 #include "thread_entry_list.h"
 
 namespace lu {
-    template <size_t MaxHP = 1, size_t MaxThread = 100, size_t MaxRetired = 100>
-    struct GenericPolicy {
-        static constexpr size_t kMaxHP = MaxHP;
-        static constexpr size_t kMaxThread = MaxThread;
-        static constexpr size_t kMaxRetired = MaxRetired;
-    };
-
     namespace detail {
+        using hazard_ptr_t = void *;
+        using retired_ptr_t = void *;
+
         template <size_t MaxHP>
         class HazardPtrList {
-            // TODO: hazard ptr lis
+        public:
+            class HazardPtr {
+                friend HazardPtrList;
+
+            public:
+                HazardPtr() = default;
+
+                void clear() {
+                    hazard_ptr_.store(nullptr);
+                }
+
+                template <class TValue>
+                void set(TValue *hazard_ptr) {
+                    hazard_ptr_.store(reinterpret_cast<hazard_ptr_t>(hazard_ptr));
+                }
+
+                hazard_ptr_t get() const {
+                    return hazard_ptr_.load();
+                }
+
+                template <class TValue>
+                TValue *getAs() const {
+                    return reinterpret_cast<TValue *>(hazard_ptr_.load());
+                }
+
+            private:
+                std::atomic<hazard_ptr_t> hazard_ptr_{nullptr};
+                HazardPtr *next_{nullptr};
+            };
 
         public:
-            void clear() {
-                // TODO: clear hazard pointers
+            HazardPtrList() : free_(hazards_) {
+                for (HazardPtr *it = hazards_; it < hazards_ + MaxHP - 1; ++it) {
+                    it->next_ = it + 1;
+                }
             }
+
+            HazardPtr *acquire() {
+                assert(!full());
+                HazardPtr *result = free_;
+                free_ = free_->next_;
+            }
+
+            void release(HazardPtr *hazard) {
+                assert(hazard >= hazards_ && hazard < hazards_ + MaxHP);
+                hazard->clear();
+                hazard->next_ = free_;
+                free_ = hazard;
+            }
+
+            void clear() {
+                free_ = hazards_;
+                for (HazardPtr *it = hazards_; it < hazards_ + MaxHP; ++it) {
+                    it->clear();
+                    it->next_ = it + 1;
+                }
+                HazardPtr *last = hazards_ + MaxHP - 1;
+                last->next_ = nullptr;
+            }
+
+            HazardPtr *begin() {
+                return hazards_;
+            }
+
+            HazardPtr *end() {
+                return hazards_ + MaxHP;
+            }
+
+            [[maybe_unused]] bool full() const {
+                return free_ == nullptr;
+            }
+
+        private:
+            HazardPtr hazards_[MaxHP]{};
+            HazardPtr *free_{nullptr};
         };
 
         template <size_t MaxRetired>
         class RetiredList {
         public:
             class RetiredPtr {
-                typedef void (*DisposerFunc )(void *);
+                typedef void (*DisposerFunc )(retired_ptr_t);
 
             public:
                 RetiredPtr() = default;
 
-                RetiredPtr(void *pointer, DisposerFunc dispose)
+                RetiredPtr(retired_ptr_t pointer, DisposerFunc dispose)
                         : pointer_(pointer), disposer_(dispose) {}
 
                 RetiredPtr(const RetiredPtr &other)
@@ -103,7 +170,7 @@ namespace lu {
                 }
 
             private:
-                void *pointer_{nullptr};
+                retired_ptr_t pointer_{nullptr};
                 DisposerFunc disposer_{nullptr};
             };
 
@@ -137,11 +204,11 @@ namespace lu {
                 last_ = retires_;
             }
 
-            RetiredPtr begin() {
+            RetiredPtr *begin() {
                 return retires_;
             }
 
-            RetiredPtr end() {
+            RetiredPtr *end() {
                 return last_;
             }
 
@@ -151,25 +218,32 @@ namespace lu {
         };
     } // namespace detail
 
+    template <size_t MaxHP = 1, size_t MaxThread = 100, size_t MaxRetired = 100>
+    struct GenericPolicy {
+        static constexpr size_t kMaxHP = MaxHP;
+        static constexpr size_t kMaxThread = MaxThread;
+        static constexpr size_t kMaxRetired = MaxRetired;
+    };
 
     template <class Policy = GenericPolicy<>, class Allocator = std::allocator<std::byte>>
     class HazardPointerDomain {
         friend class DestructThreadEntry;
 
+        using HazardPointers = detail::HazardPtrList<Policy::kMaxHP>;
+        using RetiredPointers = detail::RetiredList<Policy::kMaxRetired>;
+
         class ThreadData {
-            using HazardPointers = detail::HazardPtrList<Policy::kMaxHP>;
-            using RetiredPointers = detail::RetiredList<Policy::kMaxRetired>;
+
 
         public:
             HazardPointers hazard_pointers_;
-            RetiredPointers retiredPointers_;
+            RetiredPointers retired_pointers_;
         };
 
         struct DestructThreadEntry {
             void operator()(ThreadData *data) const {
                 data->hazard_pointers_.clear();
                 HazardPointerDomain::instance().scan();
-                HazardPointerDomain::instance().helpScan();
             }
         };
 
@@ -207,11 +281,74 @@ namespace lu {
 
     private:
         void scan() {
-            // TODO scan hazard ptrs
+            ThreadData &thread_data = entries_.getValue();
+            scan(thread_data);
+            helpScan(thread_data);
         }
 
-        void helpScan() {
-            // TODO scan empty entries
+        void scan(ThreadData &thread_data) {
+            using RetiredPtr = RetiredPointers::RetiredPtr;
+            if (thread_data.retired_pointers_.empty()) {
+                return;
+            }
+            std::bitset<Policy::kMaxRetired> hazards_;
+            RetiredPtr *ret_beg = thread_data.retired_pointers_.begin();
+            RetiredPtr *ret_end = thread_data.retired_pointers_.end();
+            std::sort(ret_beg, ret_end);
+            for (auto thread_it = entries_.begin(); thread_it != entries_.end(); ++thread_it) {
+                ThreadData &other_td = thread_it->value();
+                for (auto hp = other_td.hazard_pointers_.begin(); hp != other_td.hazard_pointers_.begin(); ++hp) {
+                    auto ptr = hp->get();
+                    if (ptr != nullptr) {
+                        RetiredPtr dummy_retired(ptr, nullptr);
+                        RetiredPtr *res = std::lower_bound(ret_beg, ret_end, dummy_retired);
+                        if (res != ret_end && *res == dummy_retired) {
+                            hazards_[res - ret_beg] = true;
+                        }
+                    }
+                }
+            }
+
+            RetiredPtr *ret_insert = ret_beg;
+            for (auto it = ret_beg; it != ret_end; ++it) {
+                if (!hazards_[it - ret_beg]) {
+                    it->dispose();
+                } else {
+                    if (ret_insert != it) {
+                        *ret_insert = *it;
+                    }
+                    ret_insert += 1;
+                }
+            }
+            thread_data.retired_pointers_.setLast(ret_insert);
+        }
+
+        void helpScan(ThreadData &thread_data) {
+            using RetiredPtr = RetiredPointers::RetiredPtr;
+            for (auto thread_it = entries_.begin(); thread_it != entries_.end(); ++thread_it) {
+                ThreadData &other_td = thread_it->value();
+                if (&thread_data == &other_td) {
+                    continue;
+                }
+                if (!thread_it->tryAcquire()) {
+                    continue;
+                }
+                if (other_td.retired_pointers_.empty()) {
+                    thread_it->release();
+                    continue;
+                }
+                RetiredPtr *src_beg = other_td.retired_pointers_.begin();
+                RetiredPtr* src_end = other_td.retired_pointers_.end();
+                for (auto it = src_beg; it != src_end; ++it) {
+                    while (thread_data.retired_pointers_.full()) {
+                        scan(thread_data);
+                    }
+                    thread_data.retired_pointers_.pushBack(std::move(*it));
+                }
+                other_td.retired_pointers_.clear();
+                thread_it->release();
+                scan(thread_data);
+            }
         }
 
     private:
