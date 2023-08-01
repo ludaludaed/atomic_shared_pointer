@@ -68,12 +68,12 @@ namespace lu {
 
             explicit Iterator(Entry *current) : current_(current) {}
 
-            reference operator*() const {
+            reference operator*() {
                 return *current_;
             }
 
-            pointer operator->() const {
-                return &current_;
+            pointer operator->() {
+                return current_;
             }
 
             Iterator &operator++() {

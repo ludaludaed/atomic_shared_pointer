@@ -30,7 +30,7 @@ namespace lu {
                 }
 
                 template <class TValue>
-                void store(TValue hazard_ptr) {
+                void store(TValue *hazard_ptr) {
                     hazard_ptr_.store(reinterpret_cast<hazard_ptr_t>(hazard_ptr));
                 }
 
@@ -192,7 +192,7 @@ namespace lu {
 
             void pushBack(RetiredPtr &&retired) {
                 assert(!full());
-                last_ = retired;
+                *last_ = std::move(retired);
                 last_ += 1;
             }
 
@@ -345,11 +345,11 @@ namespace lu {
             do {
                 result = ptr.load();
                 hazard_ptr->store(result);
-            } while (result != ptr.store());
+            } while (result != ptr.load());
             return GuardedPtr(result, hazard_ptr);
         }
 
-        template <class TValue, class Disposer>
+        template <class Disposer, class TValue>
         void retire(TValue *ptr) {
             struct TypeRecovery {
                 static void dispose(void *value) {
