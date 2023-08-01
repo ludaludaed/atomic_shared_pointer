@@ -575,7 +575,7 @@ namespace lu {
                 desired.release();
                 return true;
             } else {
-                expected = load();
+                expected = std::move(load());
                 return false;
             }
         }
