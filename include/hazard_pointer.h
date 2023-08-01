@@ -8,6 +8,7 @@
 #include <bitset>
 #include <cassert>
 #include <algorithm>
+#include <thread>
 #include "thread_entry_list.h"
 
 namespace lu {
@@ -29,16 +30,16 @@ namespace lu {
                 }
 
                 template <class TValue>
-                void set(TValue *hazard_ptr) {
+                void store(TValue hazard_ptr) {
                     hazard_ptr_.store(reinterpret_cast<hazard_ptr_t>(hazard_ptr));
                 }
 
-                hazard_ptr_t get() const {
+                hazard_ptr_t load() const {
                     return hazard_ptr_.load();
                 }
 
                 template <class TValue>
-                TValue *getAs() const {
+                TValue *loadAs() const {
                     return reinterpret_cast<TValue *>(hazard_ptr_.load());
                 }
 
@@ -233,6 +234,8 @@ namespace lu {
 
         using HazardPointers = detail::HazardPtrList<Policy::kMaxHP>;
         using RetiredPointers = detail::RetiredList<Policy::kMaxRetired>;
+        using HazardPtr = HazardPointers::HazardPtr;
+        using RetiredPtr = RetiredPointers::RetiredPtr;
 
         class ThreadData {
         public:
@@ -253,12 +256,9 @@ namespace lu {
         template <class TValue>
         class GuardedPtr {
         public:
-            using HazardPtr = HazardPointers::HazardPtr;
-
-        public:
             GuardedPtr() = default;
 
-            GuardedPtr(TValue value, HazardPtr *hazard_ptr) : value_(value), hazard_ptr_(hazard_ptr) {}
+            GuardedPtr(TValue *value, HazardPtr *hazard_ptr) : value_(value), hazard_ptr_(hazard_ptr) {}
 
             GuardedPtr(const GuardedPtr &) = delete;
 
@@ -285,12 +285,20 @@ namespace lu {
                 std::swap(hazard_ptr_, other.hazard_ptr_);
             }
 
-            TValue get() {
-                return value_;
+            explicit operator bool() const {
+                return hazard_ptr_ != nullptr;
             }
 
-            [[nodiscard]] bool isProtected() const {
-                return hazard_ptr_ != nullptr;
+            TValue &operator*() {
+                return *value_;
+            }
+
+            const TValue &operator*() const {
+                return *value_;
+            }
+
+            TValue *operator->() {
+                return value_;
             }
 
             void clear() {
@@ -308,7 +316,7 @@ namespace lu {
             }
 
         private:
-            TValue value_{nullptr};
+            TValue *value_{nullptr};
             HazardPtr *hazard_ptr_{nullptr};
         };
 
@@ -330,13 +338,31 @@ namespace lu {
         }
 
         template <class TValue>
-        GuardedPtr<TValue> protect(std::atomic<TValue> &ptr) {
-            // TODO: protection for ptr
+        GuardedPtr<TValue> protect(std::atomic<TValue *> &ptr) {
+            ThreadData &thread_data = entries_.getValue();
+            HazardPtr *hazard_ptr = thread_data.hazard_pointers_.acquire();
+            TValue *result;
+            do {
+                result = ptr.load();
+                hazard_ptr->store(result);
+            } while (result != ptr.store());
+            return GuardedPtr(result, hazard_ptr);
         }
 
         template <class TValue, class Disposer>
         void retire(TValue *ptr) {
-            // TODO: retire for ptr
+            struct TypeRecovery {
+                static void dispose(void *value) {
+                    Disposer()(reinterpret_cast<TValue *>(value));
+                }
+            };
+            ThreadData &thread_data = entries_.getValue();
+            while (thread_data.retired_pointers_.full()) {
+                scan(thread_data);
+                std::this_thread::yield();
+            }
+            RetiredPtr retired(ptr, TypeRecovery::dispose);
+            thread_data.retired_pointers_.pushBack(std::move(retired));
         }
 
     private:
@@ -347,7 +373,6 @@ namespace lu {
         }
 
         void scan(ThreadData &thread_data) {
-            using RetiredPtr = RetiredPointers::RetiredPtr;
             if (thread_data.retired_pointers_.empty()) {
                 return;
             }
@@ -358,7 +383,7 @@ namespace lu {
             for (auto thread_it = entries_.begin(); thread_it != entries_.end(); ++thread_it) {
                 ThreadData &other_td = thread_it->value();
                 for (auto hp = other_td.hazard_pointers_.begin(); hp != other_td.hazard_pointers_.begin(); ++hp) {
-                    auto ptr = hp->get();
+                    auto ptr = hp->load();
                     if (ptr != nullptr) {
                         RetiredPtr dummy_retired(ptr, nullptr);
                         RetiredPtr *res = std::lower_bound(ret_beg, ret_end, dummy_retired);
@@ -384,7 +409,6 @@ namespace lu {
         }
 
         void helpScan(ThreadData &thread_data) {
-            using RetiredPtr = RetiredPointers::RetiredPtr;
             for (auto thread_it = entries_.begin(); thread_it != entries_.end(); ++thread_it) {
                 ThreadData &other_td = thread_it->value();
                 if (&thread_data == &other_td) {
