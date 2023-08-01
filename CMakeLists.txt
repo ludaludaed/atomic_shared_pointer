@@ -10,4 +10,5 @@ add_executable(atomic_shared_pointer
         src/hazard_pointer_domain.h
         src/thread_entry_list.h
         src/hazard_ptr_reclaimer.h
+        src/fwd.h
 )

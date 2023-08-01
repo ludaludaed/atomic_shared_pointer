@@ -193,7 +193,7 @@ namespace lu {
         // only for atomic share pointer
         explicit SharedPtr(ControlBlockBase *control_block)
                 : control_block_(control_block),
-                  value_(reinterpret_cast<TValue>(control_block->get())) {}
+                  value_(reinterpret_cast<TValue *>(control_block->get())) {}
 
         ControlBlockBase *release() {
             auto old = control_block_;
@@ -527,6 +527,7 @@ namespace lu {
     class AtomicSharedPtr {
     public:
         static constexpr bool is_always_lock_free = true;
+
     public:
         AtomicSharedPtr() : control_block_(nullptr) {}
 
@@ -555,8 +556,12 @@ namespace lu {
 
         SharedPtr<TValue> load(std::memory_order order = std::memory_order_seq_cst) const {
             auto guarded = Reclaimer::protect(control_block_);
-            guarded->incrementRef();
-            return SharedPtr<TValue>(guarded.get());
+            if (guarded.get() == nullptr) {
+                return SharedPtr<TValue>{};
+            } else {
+                guarded->incrementRef();
+                return SharedPtr<TValue>(guarded.get());
+            }
         }
 
         SharedPtr<TValue> exchange(SharedPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst) {
@@ -565,7 +570,7 @@ namespace lu {
             return SharedPtr<TValue>(old_ptr);
         }
 
-        bool compareExchange(SharedPtr<TValue> &expected, SharedPtr<TValue> &&desired) {
+        bool compareExchange(SharedPtr<TValue> &expected, SharedPtr<TValue> &desired) {
             ControlBlockBase *expected_ptr = expected.control_block_;
             ControlBlockBase *desired_ptr = desired.control_block_;
             if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {

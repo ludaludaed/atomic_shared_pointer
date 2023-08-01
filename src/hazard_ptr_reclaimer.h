@@ -18,12 +18,12 @@ namespace lu {
         using GuardedPtr = Domain::template GuardedPtr<TValue>;
 
         template <class TValue>
-        static GuardedPtr<TValue> protect(std::atomic<TValue *> &ptr) {
+        static GuardedPtr<TValue> protect(const std::atomic<TValue *> &ptr) {
             return reclaimer.protect(ptr);
         }
 
         static void delayDecrementRef(ControlBlockBase *control_block) {
-            class Disposer {
+            struct Disposer {
                 void operator()(ControlBlockBase *control_block) const {
                     control_block->decrementRef();
                 }
@@ -32,7 +32,7 @@ namespace lu {
         }
 
         static void delayDecrementWeakRef(ControlBlockBase *control_block) {
-            class Disposer {
+            struct Disposer {
                 void operator()(ControlBlockBase *control_block) const {
                     control_block->decrementWeakRef();
                 }

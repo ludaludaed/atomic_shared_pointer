@@ -266,6 +266,7 @@ namespace lu {
             }
         };
 
+    public:
         template <class TValue>
         class GuardedPtr {
         public:
@@ -366,7 +367,7 @@ namespace lu {
         }
 
         template <class TValue>
-        GuardedPtr<TValue> protect(std::atomic<TValue *> &ptr) {
+        GuardedPtr<TValue> protect(const std::atomic<TValue *> &ptr) {
             ThreadData &thread_data = entries_.getValue();
             HazardPtr *hazard_ptr = thread_data.acquireHP();
             TValue *result;
