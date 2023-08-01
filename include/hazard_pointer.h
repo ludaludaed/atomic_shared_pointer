@@ -59,6 +59,7 @@ namespace lu {
                 assert(!full());
                 HazardPtr *result = free_;
                 free_ = free_->next_;
+                return result;
             }
 
             void release(HazardPtr *hazard) {
@@ -346,7 +347,7 @@ namespace lu {
                 result = ptr.load();
                 hazard_ptr->store(result);
             } while (result != ptr.load());
-            return GuardedPtr(result, hazard_ptr);
+            return GuardedPtr<TValue>(result, hazard_ptr);
         }
 
         template <class Disposer, class TValue>

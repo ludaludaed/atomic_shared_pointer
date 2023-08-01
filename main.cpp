@@ -20,7 +20,7 @@ public:
 int main() {
     int *ptr = new int(10);
     HazardPointerDomain<GenericPolicy<>>::instance().retire<Dispose>(ptr);
-    std::atomic<int *> atom;
+    std::atomic<int*> atom{ptr};
     HazardPointerDomain<GenericPolicy<>>::instance().protect(atom);
     return 0;
 }
