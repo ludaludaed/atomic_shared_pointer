@@ -220,10 +220,10 @@ namespace lu {
         };
     } // namespace detail
 
-    template <size_t MaxHP = 1, size_t MaxThread = 100, size_t MaxRetired = 100>
+    template <size_t MaxHP = 1, size_t MaxRetired = 100, size_t ScanDelay = 10>
     struct GenericPolicy {
         static constexpr size_t kMaxHP = MaxHP;
-        static constexpr size_t kMaxThread = MaxThread;
+        static constexpr size_t kScanDelay = ScanDelay;
         static constexpr size_t kMaxRetired = MaxRetired;
     };
 
@@ -242,14 +242,26 @@ namespace lu {
         public:
             ThreadData() = default;
 
+            void releaseHP(HazardPtr *ptr) {
+                hazards.release(ptr);
+                if (++ticks % Policy::kScanDelay == 0) {
+                    HazardPointerDomain::instance().scan();
+                }
+            }
+
+            HazardPtr *acquireHP() {
+                return hazards.acquire();
+            }
+
         public:
-            HazardPointers hazard_pointers_{};
-            RetiredPointers retired_pointers_{};
+            size_t ticks{0};
+            HazardPointers hazards{};
+            RetiredPointers retires{};
         };
 
         struct DestructThreadEntry {
             void operator()(ThreadData *data) const {
-                data->hazard_pointers_.clear();
+                data->hazards.clear();
                 HazardPointerDomain::instance().scan();
             }
         };
@@ -312,7 +324,7 @@ namespace lu {
                 if (hazard_ptr_ != nullptr) {
                     ThreadData &thread_data = HazardPointerDomain::instance().entries_.getValue();
                     hazard_ptr_->clear();
-                    thread_data.hazard_pointers_.release(hazard_ptr_);
+                    thread_data.releaseHP(hazard_ptr_);
                 }
             }
 
@@ -341,7 +353,7 @@ namespace lu {
         template <class TValue>
         GuardedPtr<TValue> protect(std::atomic<TValue *> &ptr) {
             ThreadData &thread_data = entries_.getValue();
-            HazardPtr *hazard_ptr = thread_data.hazard_pointers_.acquire();
+            HazardPtr *hazard_ptr = thread_data.acquireHP();
             TValue *result;
             do {
                 result = ptr.load();
@@ -358,12 +370,12 @@ namespace lu {
                 }
             };
             ThreadData &thread_data = entries_.getValue();
-            while (thread_data.retired_pointers_.full()) {
+            while (thread_data.retires.full()) {
                 scan(thread_data);
                 std::this_thread::yield();
             }
             RetiredPtr retired(ptr, TypeRecovery::dispose);
-            thread_data.retired_pointers_.pushBack(std::move(retired));
+            thread_data.retires.pushBack(std::move(retired));
         }
 
     private:
@@ -374,16 +386,16 @@ namespace lu {
         }
 
         void scan(ThreadData &thread_data) {
-            if (thread_data.retired_pointers_.empty()) {
+            if (thread_data.retires.empty()) {
                 return;
             }
             std::bitset<Policy::kMaxRetired> hazards_;
-            RetiredPtr *ret_beg = thread_data.retired_pointers_.begin();
-            RetiredPtr *ret_end = thread_data.retired_pointers_.end();
+            RetiredPtr *ret_beg = thread_data.retires.begin();
+            RetiredPtr *ret_end = thread_data.retires.end();
             std::sort(ret_beg, ret_end);
             for (auto thread_it = entries_.begin(); thread_it != entries_.end(); ++thread_it) {
                 ThreadData &other_td = thread_it->value();
-                for (auto hp = other_td.hazard_pointers_.begin(); hp != other_td.hazard_pointers_.begin(); ++hp) {
+                for (auto hp = other_td.hazards.begin(); hp != other_td.hazards.end(); ++hp) {
                     auto ptr = hp->load();
                     if (ptr != nullptr) {
                         RetiredPtr dummy_retired(ptr, nullptr);
@@ -406,7 +418,7 @@ namespace lu {
                     ret_insert += 1;
                 }
             }
-            thread_data.retired_pointers_.setLast(ret_insert);
+            thread_data.retires.setLast(ret_insert);
         }
 
         void helpScan(ThreadData &thread_data) {
@@ -418,19 +430,19 @@ namespace lu {
                 if (!thread_it->tryAcquire()) {
                     continue;
                 }
-                if (other_td.retired_pointers_.empty()) {
+                if (other_td.retires.empty()) {
                     thread_it->release();
                     continue;
                 }
-                RetiredPtr *src_beg = other_td.retired_pointers_.begin();
-                RetiredPtr *src_end = other_td.retired_pointers_.end();
+                RetiredPtr *src_beg = other_td.retires.begin();
+                RetiredPtr *src_end = other_td.retires.end();
                 for (auto it = src_beg; it != src_end; ++it) {
-                    while (thread_data.retired_pointers_.full()) {
+                    while (thread_data.retires.full()) {
                         scan(thread_data);
                     }
-                    thread_data.retired_pointers_.pushBack(std::move(*it));
+                    thread_data.retires.pushBack(std::move(*it));
                 }
-                other_td.retired_pointers_.clear();
+                other_td.retires.clear();
                 thread_it->release();
                 scan(thread_data);
             }
