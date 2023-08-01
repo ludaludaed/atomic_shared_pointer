@@ -229,15 +229,18 @@ namespace lu {
     class HazardPointerDomain {
         friend class DestructThreadEntry;
 
+        friend class GuardedPtr;
+
         using HazardPointers = detail::HazardPtrList<Policy::kMaxHP>;
         using RetiredPointers = detail::RetiredList<Policy::kMaxRetired>;
 
         class ThreadData {
-
+        public:
+            ThreadData() = default;
 
         public:
-            HazardPointers hazard_pointers_;
-            RetiredPointers retired_pointers_;
+            HazardPointers hazard_pointers_{};
+            RetiredPointers retired_pointers_{};
         };
 
         struct DestructThreadEntry {
@@ -249,7 +252,64 @@ namespace lu {
 
         template <class TValue>
         class GuardedPtr {
-            // TODO: RAII for protect ptr
+        public:
+            using HazardPtr = HazardPointers::HazardPtr;
+
+        public:
+            GuardedPtr() = default;
+
+            GuardedPtr(TValue value, HazardPtr *hazard_ptr) : value_(value), hazard_ptr_(hazard_ptr) {}
+
+            GuardedPtr(const GuardedPtr &) = delete;
+
+            GuardedPtr(GuardedPtr &&other)
+            noexcept: value_(other.value_), hazard_ptr_(other.hazard_ptr_) {
+                other.value_ = nullptr;
+                other.hazard_ptr_ = nullptr;
+            }
+
+            ~GuardedPtr() {
+                clearProtection();
+            }
+
+            GuardedPtr &operator=(const GuardedPtr &) = delete;
+
+            GuardedPtr &operator=(GuardedPtr &&other) noexcept {
+                GuardedPtr temp(std::move(other));
+                swap(temp);
+                return *this;
+            }
+
+            void swap(GuardedPtr &other) {
+                std::swap(value_, other.value_);
+                std::swap(hazard_ptr_, other.hazard_ptr_);
+            }
+
+            TValue get() {
+                return value_;
+            }
+
+            [[nodiscard]] bool isProtected() const {
+                return hazard_ptr_ != nullptr;
+            }
+
+            void clear() {
+                clearProtection();
+                value_ = nullptr;
+                hazard_ptr_ = nullptr;
+            }
+
+            void clearProtection() {
+                if (hazard_ptr_ != nullptr) {
+                    ThreadData &thread_data = HazardPointerDomain::instance().entries_.getValue();
+                    hazard_ptr_->clear();
+                    thread_data.hazard_pointers_.release(hazard_ptr_);
+                }
+            }
+
+        private:
+            TValue value_{nullptr};
+            HazardPtr *hazard_ptr_{nullptr};
         };
 
     private:
@@ -338,7 +398,7 @@ namespace lu {
                     continue;
                 }
                 RetiredPtr *src_beg = other_td.retired_pointers_.begin();
-                RetiredPtr* src_end = other_td.retired_pointers_.end();
+                RetiredPtr *src_end = other_td.retired_pointers_.end();
                 for (auto it = src_beg; it != src_end; ++it) {
                     while (thread_data.retired_pointers_.full()) {
                         scan(thread_data);
