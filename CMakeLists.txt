@@ -5,8 +5,9 @@ set(CMAKE_CXX_STANDARD 20)
 
 add_executable(atomic_shared_pointer
         main.cpp
-        include/atomic_shared_pointer.h
-        include/utils.h
-        include/hazard_pointer.h
-        include/thread_entry_list.h
-        )
+        src/atomic_shared_pointer.h
+        src/utils.h
+        src/hazard_pointer_domain.h
+        src/thread_entry_list.h
+        src/hazard_ptr_reclaimer.h
+)

@@ -195,6 +195,13 @@ namespace lu {
                 : control_block_(control_block),
                   value_(reinterpret_cast<TValue>(control_block->get())) {}
 
+        ControlBlockBase *release() {
+            auto old = control_block_;
+            control_block_ = nullptr;
+            value_ = nullptr;
+            return old;
+        }
+
     public:
         SharedPtr() : control_block_(nullptr), value_(nullptr) {}
 
@@ -525,17 +532,53 @@ namespace lu {
 
         AtomicSharedPtr(const AtomicSharedPtr &) = delete;
 
+        ~AtomicSharedPtr() {
+            auto ptr = control_block_.load();
+            if (ptr != nullptr) {
+                Reclaimer::delayDecrementRef(ptr);
+            }
+        }
+
         AtomicSharedPtr &operator=(const AtomicSharedPtr &) = delete;
 
         [[nodiscard]] bool is_lock_free() const noexcept {
             return true;
         }
 
-        void store(SharedPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst);
+        void store(SharedPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst) {
+            ControlBlockBase *new_ptr = ptr.release();
+            ControlBlockBase *old_ptr = control_block_.exchange(new_ptr, order);
+            if (old_ptr != nullptr) {
+                Reclaimer::delayDecrementRef(old_ptr);
+            }
+        }
 
-        SharedPtr<TValue> load(std::memory_order order = std::memory_order_seq_cst) const;
+        SharedPtr<TValue> load(std::memory_order order = std::memory_order_seq_cst) const {
+            auto guarded = Reclaimer::protect(control_block_);
+            guarded->incrementRef();
+            return SharedPtr<TValue>(guarded.get());
+        }
 
-        SharedPtr<TValue> exchange(SharedPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst);
+        SharedPtr<TValue> exchange(SharedPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst) {
+            ControlBlockBase *new_ptr = ptr.release();
+            ControlBlockBase *old_ptr = control_block_.exchange(new_ptr, order);
+            return SharedPtr<TValue>(old_ptr);
+        }
+
+        bool compareExchange(SharedPtr<TValue> &expected, SharedPtr<TValue> &&desired) {
+            ControlBlockBase *expected_ptr = expected.control_block_;
+            ControlBlockBase *desired_ptr = desired.control_block_;
+            if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {
+                if (expected_ptr != nullptr) {
+                    Reclaimer::delayDecrementRef(expected_ptr);
+                }
+                desired.release();
+                return true;
+            } else {
+                expected = load();
+                return false;
+            }
+        }
 
     private:
         std::atomic<ControlBlockBase *> control_block_;

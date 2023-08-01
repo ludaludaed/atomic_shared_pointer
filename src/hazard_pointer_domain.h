@@ -2,8 +2,8 @@
 // Created by ludaludaed on 19.07.2023.
 //
 
-#ifndef ATOMIC_SHARED_POINTER_HAZARD_POINTER_H
-#define ATOMIC_SHARED_POINTER_HAZARD_POINTER_H
+#ifndef ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H
+#define ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H
 
 #include <bitset>
 #include <cassert>
@@ -220,14 +220,14 @@ namespace lu {
         };
     } // namespace detail
 
-    template <size_t MaxHP = 1, size_t MaxRetired = 100, size_t ScanDelay = 10>
+    template <size_t MaxHP = 4, size_t MaxRetired = 256, size_t ScanDelay = 8>
     struct GenericPolicy {
         static constexpr size_t kMaxHP = MaxHP;
-        static constexpr size_t kScanDelay = ScanDelay;
         static constexpr size_t kMaxRetired = MaxRetired;
+        static constexpr size_t kScanDelay = ScanDelay;
     };
 
-    template <class Policy = GenericPolicy<>, class Allocator = std::allocator<std::byte>>
+    template <class Policy = GenericPolicy<4, 256, 8>, class Allocator = std::allocator<std::byte>>
     class HazardPointerDomain {
         friend class DestructThreadEntry;
 
@@ -314,6 +314,10 @@ namespace lu {
                 return value_;
             }
 
+            TValue *get() {
+                return value_;
+            }
+
             void clear() {
                 clearProtection();
                 value_ = nullptr;
@@ -344,6 +348,17 @@ namespace lu {
         HazardPointerDomain &operator=(const HazardPointerDomain &) = delete;
 
         HazardPointerDomain &operator=(HazardPointerDomain &&) = delete;
+
+        ~HazardPointerDomain() {
+            for (auto it = entries_.begin(); it != entries_.end(); ++it) {
+                ThreadData &data = it->value();
+                for (auto ret_it = data.retires.begin(); ret_it != data.retires.end(); ++ret_it) {
+                    if (*ret_it) {
+                        ret_it->dispose();
+                    }
+                }
+            }
+        }
 
         static HazardPointerDomain &instance() {
             static HazardPointerDomain instance;
@@ -453,4 +468,4 @@ namespace lu {
     };
 }
 
-#endif //ATOMIC_SHARED_POINTER_HAZARD_POINTER_H
+#endif //ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H
