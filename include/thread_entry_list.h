@@ -30,11 +30,15 @@ namespace lu {
             Entry &operator=(Entry &&) = delete;
 
             void release() {
-                active_.store(false, std::memory_order_release);
+                acquired_.store(false, std::memory_order_release);
             }
 
-            bool isActive() const {
-                return active_.load(std::memory_order_relaxed);
+            bool isAcquire() const {
+                return acquired_.load(std::memory_order_relaxed);
+            }
+
+            bool tryAcquire() {
+                return !acquired_.exchange(true);
             }
 
             TValue &value() {
@@ -48,7 +52,7 @@ namespace lu {
         private:
             TValue value_{};
             Entry *next_{nullptr};
-            std::atomic<bool> active_{true};
+            std::atomic<bool> acquired_{true};
         };
 
         class Iterator {
@@ -129,10 +133,9 @@ namespace lu {
         }
 
         void releaseEntry(Entry *entry) const {
-            if (entry == nullptr) {
-                return;
+            if (entry != nullptr) {
+                entry->release();
             }
-            entry->active_.store(false);
         }
 
         iterator begin() const {
@@ -161,7 +164,7 @@ namespace lu {
         Entry *findFree() const {
             Entry *current = head_.load();
             while (current != nullptr) {
-                if (!current->active_.exchange(true)) {
+                if (current->tryAcquire()) {
                     return current;
                 }
                 current = current->next_;
@@ -227,7 +230,7 @@ namespace lu {
                 if (entry_ == nullptr) {
                     entry_ = list_.acquireEntry();
                 }
-                return &entry_;
+                return *entry_;
             }
 
         private:
@@ -238,12 +241,12 @@ namespace lu {
         EntriesHolder() = default;
 
         TValue &getValue() {
-            EntryHolder & holder = getHolder();
+            EntryHolder &holder = getHolder();
             return holder.getValue();
         }
 
         Entry &getEntry() {
-            EntryHolder & holder = getHolder();
+            EntryHolder &holder = getHolder();
             return holder.getEntry();
         }
 
