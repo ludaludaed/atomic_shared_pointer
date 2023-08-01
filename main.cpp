@@ -18,11 +18,11 @@ public:
 };
 
 int main() {
-    HazardPointerDomain<GenericPolicy<>>& inst = HazardPointerDomain<GenericPolicy<>>::instance();
+    HazardPointerDomain<GenericPolicy<>> &inst = HazardPointerDomain<GenericPolicy<>>::instance();
     int *ptr = new int(10);
-    std::atomic<int*> atom{ptr};
+    std::atomic<int *> atom{ptr};
     auto first = inst.protect(atom);
-
+    inst.retire<Dispose>(ptr);
 
     return 0;
 }
