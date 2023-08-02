@@ -533,6 +533,8 @@ namespace lu {
 
         AtomicSharedPtr(const AtomicSharedPtr &) = delete;
 
+        AtomicSharedPtr(AtomicSharedPtr &&) = delete;
+
         ~AtomicSharedPtr() {
             auto ptr = control_block_.load();
             if (ptr != nullptr) {
@@ -541,6 +543,13 @@ namespace lu {
         }
 
         AtomicSharedPtr &operator=(const AtomicSharedPtr &) = delete;
+
+        AtomicSharedPtr &operator=(AtomicSharedPtr &&) = delete;
+
+        AtomicSharedPtr &operator=(SharedPtr<TValue> other) {
+            store(std::move(other));
+            return *this;
+        }
 
         [[nodiscard]] bool is_lock_free() const noexcept {
             return true;
@@ -554,7 +563,7 @@ namespace lu {
             }
         }
 
-        SharedPtr<TValue> load(std::memory_order order = std::memory_order_seq_cst) const {
+        SharedPtr<TValue> load() const {
             auto guarded = Reclaimer::protect(control_block_);
             if (guarded.get() == nullptr) {
                 return SharedPtr<TValue>{};

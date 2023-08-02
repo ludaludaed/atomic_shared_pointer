@@ -327,9 +327,7 @@ namespace lu {
 
             void clearProtection() {
                 if (hazard_ptr_ != nullptr) {
-                    ThreadData &thread_data = HazardPointerDomain::instance().entries_.getValue();
-                    hazard_ptr_->clear();
-                    thread_data.releaseHP(hazard_ptr_);
+                    HazardPointerDomain::instance().release(hazard_ptr_);
                 }
             }
 
@@ -364,6 +362,14 @@ namespace lu {
         static HazardPointerDomain &instance() {
             static HazardPointerDomain instance;
             return instance;
+        }
+
+        void release(HazardPtr *hazard_ptr) {
+            if (hazard_ptr != nullptr) {
+                ThreadData &thread_data = entries_.getValue();
+                hazard_ptr->clear();
+                thread_data.releaseHP(hazard_ptr);
+            }
         }
 
         template <class TValue>
