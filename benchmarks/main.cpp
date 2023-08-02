@@ -83,7 +83,6 @@ void abstractStressTest(const std::function<void(int, int)> &foo) {
 }
 
 void stacksCompare() {
-    std::cout << sizeof(int*) << std::endl;
     std::cout << "__________________________________Stack compare__________________________________" << std::endl;
     std::cout << std::endl << "from vtyulb:" << std::endl;
     abstractStressTest(stressTest<LFStructs::LFStack<int>>);
