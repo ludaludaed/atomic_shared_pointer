@@ -2,36 +2,35 @@
 // Created by ludaludaed on 02.08.2023.
 //
 
-#ifndef ATOMIC_SHARED_POINTER_STD_ATOMIC_SP_H
-#define ATOMIC_SHARED_POINTER_STD_ATOMIC_SP_H
+#ifndef ATOMIC_SHARED_POINTER_MY_STACK_H
+#define ATOMIC_SHARED_POINTER_MY_STACK_H
 
-#include <memory>
-#include <atomic>
 #include <optional>
+#include "../src/decl_fwd.h"
 
-namespace std_atomic_sp {
+namespace lu {
     template <class TValue>
     class LockFreeStack {
         struct Node {
             TValue value{};
-            std::shared_ptr<Node> next{};
+            SharedPtr<Node> next{};
         };
 
     public:
         void push(const TValue &value) {
-            std::shared_ptr<Node> new_node = std::make_shared<Node>();
+            SharedPtr<Node> new_node = makeShared<Node>();
             new_node->value = value;
             do {
                 new_node->next = head_.load();
-            } while (!head_.compare_exchange_strong(new_node->next, new_node));
+            } while (!head_.compareExchange(new_node->next, new_node));
         }
 
         std::optional<TValue> pop() {
-            std::shared_ptr<Node> head = head_.load();
+            SharedPtr<Node> head = head_.load();
             if (!head) {
                 return {};
             }
-            while (!head_.compare_exchange_strong(head, head->next)) {
+            while (!head_.compareExchange(head, head->next)) {
                 head = head_.load();
                 if (!head) {
                     return {};
@@ -41,9 +40,8 @@ namespace std_atomic_sp {
         }
 
     private:
-        std::atomic<std::shared_ptr<Node>> head_{};
+        AtomicSharedPtr<Node> head_{};
     };
 }
 
-
-#endif //ATOMIC_SHARED_POINTER_STD_ATOMIC_SP_H
+#endif //ATOMIC_SHARED_POINTER_MY_STACK_H

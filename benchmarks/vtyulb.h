@@ -1,6 +1,6 @@
 
-#ifndef ATOMIC_SHARED_POINTER_ANOTHER
-#define ATOMIC_SHARED_POINTER_ANOTHER
+#ifndef ATOMIC_SHARED_POINTER_VTYULB_H
+#define ATOMIC_SHARED_POINTER_VTYULB_H
 
 #pragma once
 
@@ -399,4 +399,4 @@ namespace LFStructs {
     }
 } // namespace LFStructs
 
-#endif //ATOMIC_SHARED_POINTER_ANOTHER
+#endif //ATOMIC_SHARED_POINTER_VTYULB_H

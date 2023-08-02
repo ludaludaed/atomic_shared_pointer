@@ -3,47 +3,9 @@
 #include <thread>
 #include <vector>
 #include <functional>
-#include <optional>
-#include "../src/decl_fwd.h"
-#include"vtyulb.h"
+#include "vtyulb.h"
 #include "std_atomic_sp.h"
-
-
-using namespace lu;
-
-template <class TValue>
-class LockFreeStack {
-    struct Node {
-        TValue value{};
-        SharedPtr<Node> next{};
-    };
-
-public:
-    void push(const TValue &value) {
-        SharedPtr<Node> new_node = makeShared<Node>();
-        new_node->value = value;
-        do {
-            new_node->next = head_.load();
-        } while (!head_.compareExchange(new_node->next, new_node));
-    }
-
-    std::optional<TValue> pop() {
-        SharedPtr<Node> head = head_.load();
-        if (!head) {
-            return {};
-        }
-        while (!head_.compareExchange(head, head->next)) {
-            head = head_.load();
-            if (!head) {
-                return {};
-            }
-        }
-        return {head->value};
-    }
-
-private:
-    AtomicSharedPtr<Node> head_{};
-};
+#include "my_stack.h"
 
 template <typename T>
 void stress_test(int actions, int threads) {
@@ -122,12 +84,12 @@ void abstractStressTest(const std::function<void(int, int)> &foo) {
 
 void stacksCompare() {
     std::cout << "__________________________________Stack compare__________________________________" << std::endl;
-    std::cout << std::endl << "By Vladislav Tyulbashev:" << std::endl;
+    std::cout << std::endl << "from vtyulb:" << std::endl;
     abstractStressTest(stress_test<LFStructs::LFStack<int>>);
-    std::cout << std::endl << "By std:" << std::endl;
-    abstractStressTest(stress_test<default_structure::LockFreeStack<int>>);
-    std::cout << std::endl << "My:" << std::endl;
-    abstractStressTest(stress_test<LockFreeStack<int>>);
+    std::cout << std::endl << "from std:" << std::endl;
+    abstractStressTest(stress_test<std_atomic_sp::LockFreeStack<int>>);
+    std::cout << std::endl << "from me:" << std::endl;
+    abstractStressTest(stress_test<lu::LockFreeStack<int>>);
 };
 
 int main() {
