@@ -191,7 +191,7 @@ namespace lu::detail {
         using element_type = TValue;
 
     private:
-        // only for atomic share pointer
+        // only for atomic shared pointer
         explicit SharedPtr(ControlBlockBase *control_block)
                 : control_block_(control_block),
                   value_(reinterpret_cast<TValue *>(control_block->get())) {}
