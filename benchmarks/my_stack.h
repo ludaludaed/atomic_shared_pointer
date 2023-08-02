@@ -40,7 +40,7 @@ namespace lu {
         }
 
     private:
-        AtomicSharedPtr<Node> head_{};
+        AtomicSharedPtr<Node, HPReclaimer<HPolicy<1, 16, 8>>> head_{};
     };
 }
 

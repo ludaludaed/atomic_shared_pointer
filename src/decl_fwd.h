@@ -11,12 +11,18 @@
 #include "thread_entry_list.h"
 
 namespace lu {
-    using DefaultPolicy = detail::HazardPointersGenericPolicy<>;
+    template <size_t MaxHP = 4, size_t MaxRetired = 256, size_t ScanDelay = 8>
+    using HPolicy = detail::HazardPointersGenericPolicy<MaxHP, MaxRetired, ScanDelay>;
+
+    template <class Policy, class Allocator = std::allocator<std::byte>>
+    using HPReclaimer = HazardPtrReclaimer<Policy, Allocator>;
+
+    using DefaultPolicy = HPolicy<>;
 
     template <class Policy, class Allocator = std::allocator<std::byte>>
     using HazardPointers = detail::HazardPointerDomain<Policy, Allocator>;
 
-    using DefaultReclaimer = HazardPtrReclaimer<DefaultPolicy>;
+    using DefaultReclaimer = HPReclaimer<DefaultPolicy>;
 
     template <class TValue, class Reclaimer = DefaultReclaimer>
     using AtomicSharedPtr = detail::AtomicSharedPtr<TValue, Reclaimer>;
