@@ -11,10 +11,10 @@
 #include "thread_entry_list.h"
 
 namespace lu {
-    using DefaultPolicy = HazardPointersGenericPolicy<>;
+    using DefaultPolicy = detail::HazardPointersGenericPolicy<>;
 
     template <class Policy, class Allocator = std::allocator<std::byte>>
-    using HazardPointers = HazardPointerDomain<Policy, Allocator>;
+    using HazardPointers = detail::HazardPointerDomain<Policy, Allocator>;
 
     using DefaultReclaimer = HazardPtrReclaimer<DefaultPolicy>;
 

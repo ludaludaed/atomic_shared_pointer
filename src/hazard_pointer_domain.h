@@ -11,214 +11,212 @@
 #include <thread>
 #include "thread_entry_list.h"
 
-namespace lu {
-    namespace detail {
-        using hazard_ptr_t = void *;
-        using retired_ptr_t = void *;
+namespace lu::detail {
+    using hazard_ptr_t = void *;
+    using retired_ptr_t = void *;
 
-        template <size_t MaxHP>
-        class HazardPtrList {
-        public:
-            class HazardPtr {
-                friend HazardPtrList;
-
-            public:
-                HazardPtr() = default;
-
-                void clear() {
-                    hazard_ptr_.store(nullptr);
-                }
-
-                template <class TValue>
-                void store(TValue *hazard_ptr) {
-                    hazard_ptr_.store(reinterpret_cast<hazard_ptr_t>(hazard_ptr));
-                }
-
-                hazard_ptr_t load() const {
-                    return hazard_ptr_.load();
-                }
-
-                template <class TValue>
-                TValue *loadAs() const {
-                    return reinterpret_cast<TValue *>(hazard_ptr_.load());
-                }
-
-            private:
-                std::atomic<hazard_ptr_t> hazard_ptr_{nullptr};
-                HazardPtr *next_{nullptr};
-            };
+    template <size_t MaxHP>
+    class HazardPtrList {
+    public:
+        class HazardPtr {
+            friend HazardPtrList;
 
         public:
-            HazardPtrList() : free_(hazards_) {
-                for (HazardPtr *it = hazards_; it < hazards_ + MaxHP - 1; ++it) {
-                    it->next_ = it + 1;
-                }
-            }
-
-            HazardPtr *acquire() {
-                assert(!full());
-                HazardPtr *result = free_;
-                free_ = free_->next_;
-                return result;
-            }
-
-            void release(HazardPtr *hazard) {
-                assert(hazard >= hazards_ && hazard < hazards_ + MaxHP);
-                hazard->clear();
-                hazard->next_ = free_;
-                free_ = hazard;
-            }
+            HazardPtr() = default;
 
             void clear() {
-                free_ = hazards_;
-                for (HazardPtr *it = hazards_; it < hazards_ + MaxHP; ++it) {
-                    it->clear();
-                    it->next_ = it + 1;
-                }
-                HazardPtr *last = hazards_ + MaxHP - 1;
-                last->next_ = nullptr;
+                hazard_ptr_.store(nullptr);
             }
 
-            HazardPtr *begin() {
-                return hazards_;
+            template <class TValue>
+            void store(TValue *hazard_ptr) {
+                hazard_ptr_.store(reinterpret_cast<hazard_ptr_t>(hazard_ptr));
             }
 
-            HazardPtr *end() {
-                return hazards_ + MaxHP;
+            hazard_ptr_t load() const {
+                return hazard_ptr_.load();
             }
 
-            [[maybe_unused]] bool full() const {
-                return free_ == nullptr;
+            template <class TValue>
+            TValue *loadAs() const {
+                return reinterpret_cast<TValue *>(hazard_ptr_.load());
             }
 
         private:
-            HazardPtr hazards_[MaxHP]{};
-            HazardPtr *free_{nullptr};
+            std::atomic<hazard_ptr_t> hazard_ptr_{nullptr};
+            HazardPtr *next_{nullptr};
         };
 
-        template <size_t MaxRetired>
-        class RetiredList {
-        public:
-            class RetiredPtr {
-                typedef void (*DisposerFunc )(retired_ptr_t);
+    public:
+        HazardPtrList() : free_(hazards_) {
+            for (HazardPtr *it = hazards_; it < hazards_ + MaxHP - 1; ++it) {
+                it->next_ = it + 1;
+            }
+        }
 
-            public:
-                RetiredPtr() = default;
+        HazardPtr *acquire() {
+            assert(!full());
+            HazardPtr *result = free_;
+            free_ = free_->next_;
+            return result;
+        }
 
-                RetiredPtr(retired_ptr_t pointer, DisposerFunc dispose)
-                        : pointer_(pointer), disposer_(dispose) {}
+        void release(HazardPtr *hazard) {
+            assert(hazard >= hazards_ && hazard < hazards_ + MaxHP);
+            hazard->clear();
+            hazard->next_ = free_;
+            free_ = hazard;
+        }
 
-                RetiredPtr(const RetiredPtr &other)
-                        : pointer_(other.pointer_), disposer_(other.disposer_) {}
+        void clear() {
+            free_ = hazards_;
+            for (HazardPtr *it = hazards_; it < hazards_ + MaxHP; ++it) {
+                it->clear();
+                it->next_ = it + 1;
+            }
+            HazardPtr *last = hazards_ + MaxHP - 1;
+            last->next_ = nullptr;
+        }
 
-                RetiredPtr(RetiredPtr &&other)
-                noexcept: pointer_(other.pointer_), disposer_(other.disposer_) {
-                    other.clear();
-                }
+        HazardPtr *begin() {
+            return hazards_;
+        }
 
-                RetiredPtr &operator=(const RetiredPtr &other) {
-                    RetiredPtr temp(other);
-                    swap(temp);
-                    return *this;
-                }
+        HazardPtr *end() {
+            return hazards_ + MaxHP;
+        }
 
-                RetiredPtr &operator=(RetiredPtr &&other) noexcept {
-                    RetiredPtr temp(std::move(other));
-                    swap(temp);
-                    return *this;
-                }
+        [[maybe_unused]] bool full() const {
+            return free_ == nullptr;
+        }
 
-                explicit operator bool() const {
-                    return pointer_ != nullptr;
-                }
+    private:
+        HazardPtr hazards_[MaxHP]{};
+        HazardPtr *free_{nullptr};
+    };
 
-                bool operator<(const RetiredPtr &other) const {
-                    return pointer_ < other.pointer_;
-                }
-
-                bool operator>(const RetiredPtr &other) const {
-                    return pointer_ > other.pointer_;
-                }
-
-                bool operator<=(const RetiredPtr &other) const {
-                    return pointer_ <= other.pointer_;
-                }
-
-                bool operator>=(const RetiredPtr &other) const {
-                    return pointer_ >= other.pointer_;
-                }
-
-                bool operator==(const RetiredPtr &other) const {
-                    return pointer_ == other.pointer_;
-                }
-
-                bool operator!=(const RetiredPtr &other) const {
-                    return pointer_ != other.pointer_;
-                }
-
-                void swap(RetiredPtr &other) {
-                    std::swap(pointer_, other.pointer_);
-                    std::swap(disposer_, other.disposer_);
-                }
-
-                void dispose() {
-                    disposer_(pointer_);
-                    clear();
-                }
-
-                void clear() {
-                    pointer_ = nullptr;
-                    disposer_ = nullptr;
-                }
-
-            private:
-                retired_ptr_t pointer_{nullptr};
-                DisposerFunc disposer_{nullptr};
-            };
+    template <size_t MaxRetired>
+    class RetiredList {
+    public:
+        class RetiredPtr {
+            typedef void (*DisposerFunc )(retired_ptr_t);
 
         public:
-            RetiredList() : last_(retires_) {}
+            RetiredPtr() = default;
 
-            [[nodiscard]] bool empty() const {
-                return last_ == retires_;
+            RetiredPtr(retired_ptr_t pointer, DisposerFunc dispose)
+                    : pointer_(pointer), disposer_(dispose) {}
+
+            RetiredPtr(const RetiredPtr &other)
+                    : pointer_(other.pointer_), disposer_(other.disposer_) {}
+
+            RetiredPtr(RetiredPtr &&other)
+            noexcept: pointer_(other.pointer_), disposer_(other.disposer_) {
+                other.clear();
             }
 
-            [[nodiscard]] bool full() const {
-                return last_ == retires_ + MaxRetired;
+            RetiredPtr &operator=(const RetiredPtr &other) {
+                RetiredPtr temp(other);
+                swap(temp);
+                return *this;
             }
 
-            [[nodiscard]] size_t size() const {
-                return last_ - retires_;
+            RetiredPtr &operator=(RetiredPtr &&other) noexcept {
+                RetiredPtr temp(std::move(other));
+                swap(temp);
+                return *this;
             }
 
-            void pushBack(RetiredPtr &&retired) {
-                assert(!full());
-                *last_ = std::move(retired);
-                last_ += 1;
+            explicit operator bool() const {
+                return pointer_ != nullptr;
             }
 
-            void setLast(RetiredPtr *new_last) {
-                assert(new_last >= retires_ && new_last <= retires_ + MaxRetired);
-                last_ = new_last;
+            bool operator<(const RetiredPtr &other) const {
+                return pointer_ < other.pointer_;
+            }
+
+            bool operator>(const RetiredPtr &other) const {
+                return pointer_ > other.pointer_;
+            }
+
+            bool operator<=(const RetiredPtr &other) const {
+                return pointer_ <= other.pointer_;
+            }
+
+            bool operator>=(const RetiredPtr &other) const {
+                return pointer_ >= other.pointer_;
+            }
+
+            bool operator==(const RetiredPtr &other) const {
+                return pointer_ == other.pointer_;
+            }
+
+            bool operator!=(const RetiredPtr &other) const {
+                return pointer_ != other.pointer_;
+            }
+
+            void swap(RetiredPtr &other) {
+                std::swap(pointer_, other.pointer_);
+                std::swap(disposer_, other.disposer_);
+            }
+
+            void dispose() {
+                disposer_(pointer_);
+                clear();
             }
 
             void clear() {
-                last_ = retires_;
-            }
-
-            RetiredPtr *begin() {
-                return retires_;
-            }
-
-            RetiredPtr *end() {
-                return last_;
+                pointer_ = nullptr;
+                disposer_ = nullptr;
             }
 
         private:
-            RetiredPtr retires_[MaxRetired]{};
-            RetiredPtr *last_;
+            retired_ptr_t pointer_{nullptr};
+            DisposerFunc disposer_{nullptr};
         };
-    } // namespace detail
+
+    public:
+        RetiredList() : last_(retires_) {}
+
+        [[nodiscard]] bool empty() const {
+            return last_ == retires_;
+        }
+
+        [[nodiscard]] bool full() const {
+            return last_ == retires_ + MaxRetired;
+        }
+
+        [[nodiscard]] size_t size() const {
+            return last_ - retires_;
+        }
+
+        void pushBack(RetiredPtr &&retired) {
+            assert(!full());
+            *last_ = std::move(retired);
+            last_ += 1;
+        }
+
+        void setLast(RetiredPtr *new_last) {
+            assert(new_last >= retires_ && new_last <= retires_ + MaxRetired);
+            last_ = new_last;
+        }
+
+        void clear() {
+            last_ = retires_;
+        }
+
+        RetiredPtr *begin() {
+            return retires_;
+        }
+
+        RetiredPtr *end() {
+            return last_;
+        }
+
+    private:
+        RetiredPtr retires_[MaxRetired]{};
+        RetiredPtr *last_;
+    };
 
     template <size_t MaxHP = 4, size_t MaxRetired = 256, size_t ScanDelay = 8>
     struct HazardPointersGenericPolicy {
@@ -233,8 +231,8 @@ namespace lu {
 
         friend class GuardedPtr;
 
-        using HazardPointers = detail::HazardPtrList<Policy::kMaxHP>;
-        using RetiredPointers = detail::RetiredList<Policy::kMaxRetired>;
+        using HazardPointers = HazardPtrList<Policy::kMaxHP>;
+        using RetiredPointers = RetiredList<Policy::kMaxRetired>;
         using HazardPtr = HazardPointers::HazardPtr;
         using RetiredPtr = RetiredPointers::RetiredPtr;
 
@@ -477,8 +475,8 @@ namespace lu {
         }
 
     private:
-        EntriesHolder<ThreadData, DestructThreadEntry, Allocator> entries_{};
+        EntriesHolder <ThreadData, DestructThreadEntry, Allocator> entries_{};
     };
-}
+} // namespace lu::detail
 
 #endif //ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H

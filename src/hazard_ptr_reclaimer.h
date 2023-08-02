@@ -11,7 +11,7 @@
 namespace lu {
     template <class Policy, class Allocator = std::allocator<std::byte>>
     class HazardPtrReclaimer {
-        using Domain = HazardPointerDomain<Policy, Allocator>;
+        using Domain = detail::HazardPointerDomain<Policy, Allocator>;
 
     public:
         template <class TValue>

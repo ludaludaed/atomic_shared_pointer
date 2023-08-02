@@ -34,7 +34,7 @@ public:
     }
 
 private:
-    AtomicSharedPtr<Node> head_;
+    AtomicSharedPtr<Node> head_{};
 };
 
 int main() {
