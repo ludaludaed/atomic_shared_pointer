@@ -459,10 +459,14 @@ namespace lu {
                 }
                 RetiredPtr *src_beg = other_td.retires.begin();
                 RetiredPtr *src_end = other_td.retires.end();
-                for (auto it = src_beg; it != src_end; ++it) {
-                    // TODO: Maybe dead-lock if T * HP > R
-                    while (thread_data.retires.full()) {
+                for (auto it = src_end - 1; it >= src_beg; --it) {
+                    if (thread_data.retires.full()) {
                         scan(thread_data);
+                        if (thread_data.retires.full()) {
+                            other_td.retires.setLast(it + 1);
+                            thread_it->release();
+                            return;
+                        }
                     }
                     thread_data.retires.pushBack(std::move(*it));
                 }
