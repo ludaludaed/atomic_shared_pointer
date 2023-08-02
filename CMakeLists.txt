@@ -12,6 +12,5 @@ add_executable(atomic_shared_pointer
         src/thread_entry_list.h
         src/hazard_ptr_reclaimer.h
         src/decl_fwd.h
- "benchmarks/vtyulb.h"
         benchmarks/std_atomic_sp.h
         benchmarks/my_stack.h)
