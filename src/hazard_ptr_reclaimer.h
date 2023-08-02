@@ -15,7 +15,7 @@ namespace lu {
 
     public:
         template <class TValue>
-        using GuardedPtr = Domain::template GuardedPtr<TValue>;
+        using GuardedPtr = typename Domain::template GuardedPtr<TValue>;
 
         template <class TValue>
         static GuardedPtr<TValue> protect(const std::atomic<TValue *> &ptr) {

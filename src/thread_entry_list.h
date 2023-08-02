@@ -192,8 +192,8 @@ namespace lu {
         friend class EntryHolder;
 
     public:
-        using Entry = ThreadEntryList<TValue, Allocator>::Entry;
-        using iterator = ThreadEntryList<TValue, Allocator>::iterator;
+        using Entry = typename ThreadEntryList<TValue, Allocator>::Entry;
+        using iterator = typename ThreadEntryList<TValue, Allocator>::iterator;
 
     private:
         class EntryHolder {
@@ -234,7 +234,7 @@ namespace lu {
             }
 
         private:
-            ThreadEntryList<TValue, Allocator>::Entry *entry_;
+            Entry *entry_;
         };
 
     public:

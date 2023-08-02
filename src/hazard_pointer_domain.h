@@ -233,8 +233,8 @@ namespace lu::detail {
 
         using HazardPointers = HazardPtrList<Policy::kMaxHP>;
         using RetiredPointers = RetiredList<Policy::kMaxRetired>;
-        using HazardPtr = HazardPointers::HazardPtr;
-        using RetiredPtr = RetiredPointers::RetiredPtr;
+        using HazardPtr = typename HazardPointers::HazardPtr;
+        using RetiredPtr = typename RetiredPointers::RetiredPtr;
 
         class ThreadData {
         public:
