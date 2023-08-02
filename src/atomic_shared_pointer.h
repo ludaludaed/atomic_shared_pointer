@@ -9,7 +9,8 @@
 #include <memory>
 #include "utils.h"
 
-namespace lu {
+
+namespace lu::detail {
     class ControlBlockBase {
     protected:
         ControlBlockBase() : ref_counter_(1), weak_counter_(1) {}
@@ -597,6 +598,7 @@ namespace lu {
     private:
         std::atomic<ControlBlockBase *> control_block_;
     };
-}
+} // namespace lu::detail
+
 
 #endif //ATOMIC_SHARED_POINTER_ATOMIC_SHARED_POINTER_H

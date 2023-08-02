@@ -221,13 +221,13 @@ namespace lu {
     } // namespace detail
 
     template <size_t MaxHP = 4, size_t MaxRetired = 256, size_t ScanDelay = 8>
-    struct GenericPolicy {
+    struct HazardPointersGenericPolicy {
         static constexpr size_t kMaxHP = MaxHP;
         static constexpr size_t kMaxRetired = MaxRetired;
         static constexpr size_t kScanDelay = ScanDelay;
     };
 
-    template <class Policy = GenericPolicy<4, 256, 8>, class Allocator = std::allocator<std::byte>>
+    template <class Policy = HazardPointersGenericPolicy<4, 256, 8>, class Allocator = std::allocator<std::byte>>
     class HazardPointerDomain {
         friend class DestructThreadEntry;
 

@@ -2,10 +2,7 @@
 #include <memory>
 #include <thread>
 #include <vector>
-#include "src/fwd.h"
-#include "src/hazard_pointer_domain.h"
-#include "src/atomic_shared_pointer.h"
-#include "src/thread_entry_list.h"
+#include "src/decl_fwd.h"
 
 
 using namespace lu;
@@ -37,7 +34,7 @@ public:
     }
 
 private:
-    AtomicSharedPtrHP<Node> head_;
+    AtomicSharedPtr<Node> head_;
 };
 
 int main() {

@@ -22,18 +22,18 @@ namespace lu {
             return reclaimer.protect(ptr);
         }
 
-        static void delayDecrementRef(ControlBlockBase *control_block) {
+        static void delayDecrementRef(detail::ControlBlockBase *control_block) {
             struct Disposer {
-                void operator()(ControlBlockBase *control_block) const {
+                void operator()(detail::ControlBlockBase *control_block) const {
                     control_block->decrementRef();
                 }
             };
             reclaimer.template retire<Disposer>(control_block);
         }
 
-        static void delayDecrementWeakRef(ControlBlockBase *control_block) {
+        static void delayDecrementWeakRef(detail::ControlBlockBase *control_block) {
             struct Disposer {
-                void operator()(ControlBlockBase *control_block) const {
+                void operator()(detail::ControlBlockBase *control_block) const {
                     control_block->decrementWeakRef();
                 }
             };
