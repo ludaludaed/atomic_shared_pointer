@@ -392,6 +392,7 @@ namespace lu {
                 }
             };
             ThreadData &thread_data = entries_.getValue();
+            // TODO: Maybe dead-lock if T * HP > R
             while (thread_data.retires.full()) {
                 scan(thread_data);
                 std::this_thread::yield();
@@ -459,6 +460,7 @@ namespace lu {
                 RetiredPtr *src_beg = other_td.retires.begin();
                 RetiredPtr *src_end = other_td.retires.end();
                 for (auto it = src_beg; it != src_end; ++it) {
+                    // TODO: Maybe dead-lock if T * HP > R
                     while (thread_data.retires.full()) {
                         scan(thread_data);
                     }

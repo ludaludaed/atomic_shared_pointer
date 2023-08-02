@@ -47,7 +47,7 @@ int main() {
 
     for (int i = 0; i < 100; ++i) {
         workers.emplace_back([&]() {
-            for (int j = 0; j < 1000; ++j) {
+            for (int j = 0; j < 10000; ++j) {
                 stack.push(j);
                 std::cout << stack.pop() << std::endl;
             }
