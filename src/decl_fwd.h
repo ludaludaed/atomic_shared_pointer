@@ -13,7 +13,10 @@
 namespace lu {
     using DefaultPolicy = HazardPointersGenericPolicy<>;
 
-    using DefaultReclaimer = HazardPtrReclaimer<DefaultPolicy>;
+    template <class Policy, class Allocator = std::allocator<std::byte>>
+    using HazardPointers = HazardPointerDomain<Policy, Allocator>;
+
+    using DefaultReclaimer = HazardPointers<DefaultPolicy>;
 
     template <class TValue, class Reclaimer = DefaultReclaimer>
     using AtomicSharedPtr = detail::AtomicSharedPtr<TValue, Reclaimer>;
