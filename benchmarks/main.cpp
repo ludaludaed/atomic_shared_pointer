@@ -7,12 +7,12 @@
 #include "std_atomic_sp.h"
 #include "my_stack.h"
 
-template <typename T>
-void stress_test(int actions, int threads) {
+template <typename TContainer>
+void stressTest(int actions, int threads) {
     std::vector<std::thread> workers;
     std::vector<std::vector<int>> generated(threads);
     std::vector<std::vector<int>> extracted(threads);
-    T container;
+    TContainer container;
     std::atomic<int> initCount;
     for (int i = 0; i < threads; i++)
         workers.push_back(std::thread([i, actions, &container, &generated, &extracted, threads]() {
@@ -83,13 +83,14 @@ void abstractStressTest(const std::function<void(int, int)> &foo) {
 }
 
 void stacksCompare() {
+    std::cout << sizeof(int*) << std::endl;
     std::cout << "__________________________________Stack compare__________________________________" << std::endl;
     std::cout << std::endl << "from vtyulb:" << std::endl;
-    abstractStressTest(stress_test<LFStructs::LFStack<int>>);
+    abstractStressTest(stressTest<LFStructs::LFStack<int>>);
     std::cout << std::endl << "from std:" << std::endl;
-    abstractStressTest(stress_test<std_atomic_sp::LockFreeStack<int>>);
+    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
     std::cout << std::endl << "from me:" << std::endl;
-    abstractStressTest(stress_test<lu::LockFreeStack<int>>);
+    abstractStressTest(stressTest<lu::LockFreeStack<int>>);
 };
 
 int main() {
