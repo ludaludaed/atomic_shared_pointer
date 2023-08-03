@@ -415,6 +415,9 @@ namespace lu::detail {
             RetiredPtr *ret_end = thread_data.retires.end();
             std::sort(ret_beg, ret_end);
             for (auto thread_it = entries_.begin(); thread_it != entries_.end(); ++thread_it) {
+                if (!thread_it->isAcquired()) {
+                    continue;
+                }
                 ThreadData &other_td = thread_it->value();
                 for (auto hp = other_td.hazards.begin(); hp != other_td.hazards.end(); ++hp) {
                     auto ptr = hp->load();

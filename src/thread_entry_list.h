@@ -33,7 +33,7 @@ namespace lu {
                 acquired_.store(false, std::memory_order_release);
             }
 
-            bool isAcquire() const {
+            bool isAcquired() const {
                 return acquired_.load(std::memory_order_relaxed);
             }
 
