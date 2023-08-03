@@ -6,6 +6,7 @@
 #include "vtyulb.h"
 #include "std_atomic_sp.h"
 #include "my_stack.h"
+#include "my_ms_queue.h"
 
 template <typename TContainer>
 void stressTest(int actions, int threads) {
@@ -86,13 +87,24 @@ void stacksCompare() {
     std::cout << "__________________________________Stack compare__________________________________" << std::endl;
     std::cout << std::endl << "from vtyulb:" << std::endl;
     abstractStressTest(stressTest<LFStructs::LFStack<int>>);
-    std::cout << std::endl << "from std:" << std::endl;
-    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
+//    std::cout << std::endl << "from std:" << std::endl;
+//    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
     std::cout << std::endl << "from me:" << std::endl;
     abstractStressTest(stressTest<lu::LockFreeStack<int>>);
 };
 
+void queueCompare() {
+    std::cout << "__________________________________Queue compare__________________________________" << std::endl;
+//    std::cout << std::endl << "from vtyulb:" << std::endl;
+//    abstractStressTest(stressTest<LFStructs::LFQueue<int>>);
+//    std::cout << std::endl << "from std:" << std::endl;
+//    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
+    std::cout << std::endl << "from me:" << std::endl;
+    abstractStressTest(stressTest<lu::LockFreeQueue<int>>);
+};
+
 int main() {
     stacksCompare();
+    queueCompare();
     return 0;
 }

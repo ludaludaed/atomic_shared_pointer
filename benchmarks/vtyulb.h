@@ -11,6 +11,7 @@
 #include <thread>
 #include <stack>
 #include <optional>
+#include <vector>
 
 namespace LFStructs {
 

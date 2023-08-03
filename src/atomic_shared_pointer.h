@@ -38,7 +38,7 @@ namespace lu::detail {
         }
 
         void incrementWeakRef(size_t number_of_refs = 1) {
-            ref_counter_.fetch_add(number_of_refs);
+            weak_counter_.fetch_add(number_of_refs);
         }
 
         void decrementRef(size_t number_of_refs = 1) {
@@ -125,8 +125,8 @@ namespace lu::detail {
         template <class... Args>
         explicit InplaceControlBlock(const Allocator &allocator, Args &&... args)
                 : ControlBlockBase(),
-                  value_(std::forward<Args>(args)...),
                   allocator_(allocator) {
+            value_.construct(std::forward<Args>(args)...);
         }
 
         ~InplaceControlBlock() override = default;
@@ -146,7 +146,7 @@ namespace lu::detail {
 
     private:
         void destroy() override {
-            value_.~TValue();
+            value_.destruct();
         }
 
         void deleteThis() override {
@@ -157,7 +157,7 @@ namespace lu::detail {
         }
 
     private:
-        TValue value_;
+        AlignStorage<TValue> value_;
         InternalAllocator allocator_;
     };
 
@@ -580,7 +580,7 @@ namespace lu::detail {
             return SharedPtr<TValue>(old_ptr);
         }
 
-        bool compareExchange(SharedPtr<TValue> &expected, SharedPtr<TValue> &desired) {
+        bool compareExchange(SharedPtr<TValue> &expected, SharedPtr<TValue> desired) {
             ControlBlockBase *expected_ptr = expected.control_block_;
             ControlBlockBase *desired_ptr = desired.control_block_;
             if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {

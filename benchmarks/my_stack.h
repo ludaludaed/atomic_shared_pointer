@@ -26,16 +26,13 @@ namespace lu {
         }
 
         std::optional<TValue> pop() {
-            SharedPtr<Node> head = head_.load();
-            if (!head) {
-                return {};
-            }
-            while (!head_.compareExchange(head, head->next)) {
+            SharedPtr<Node> head;
+            do {
                 head = head_.load();
                 if (!head) {
-                    return {};
+                    return std::nullopt;
                 }
-            }
+            } while (!head_.compareExchange(head, head->next));
             return {head->value};
         }
 
