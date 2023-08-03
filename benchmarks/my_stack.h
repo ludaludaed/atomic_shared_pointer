@@ -37,7 +37,7 @@ namespace lu {
         }
 
     private:
-        AtomicSharedPtr<Node, HPReclaimer<HPolicy<1, 16, 8>>> head_{};
+        AtomicSharedPtr<Node> head_{};
     };
 }
 
