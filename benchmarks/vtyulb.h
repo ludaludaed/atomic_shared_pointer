@@ -398,6 +398,70 @@ namespace LFStructs {
 
         return {res.get()->data};
     }
+
+    template<typename T>
+    class LFQueue {
+        struct Node {
+            AtomicSharedPtr<Node> next;
+            T data;
+            std::atomic_flag consumed;
+        };
+
+    public:
+        LFQueue();
+
+        void push(const T& data);
+        std::optional<T> pop();
+
+    private:
+        AtomicSharedPtr<Node> front;
+        AtomicSharedPtr<Node> back;
+    };
+
+    template<typename T>
+    LFQueue<T>::LFQueue() {
+        auto fakeNode = SharedPtr(new Node{
+                                      .consumed = true
+            });
+
+        front.compareExchange(nullptr, fakeNode.copy());
+        back.compareExchange(nullptr, std::move(fakeNode));
+    }
+
+    template<typename T>
+    void LFQueue<T>::push(const T& data) {
+        auto newBack = SharedPtr(new Node{
+                                     .data = data
+            });
+
+        while (true) {
+            FastSharedPtr<Node> currentBack = back.getFast();
+            if (currentBack.get()->next.compareExchange(nullptr, newBack.copy())) {
+                back.compareExchange(currentBack.get(), std::move(newBack));
+                return;
+            }
+            else {
+                SharedPtr<Node> realPtr = currentBack.get()->next.get();
+                assert(realPtr.get() != nullptr);
+                back.compareExchange(currentBack.get(), std::move(realPtr));
+            }
+        }
+    }
+
+    template<typename T>
+    std::optional<T> LFQueue<T>::pop() {
+        FastSharedPtr<Node> res = front.getFast();
+        while (res.get()->consumed.test_and_set()) {
+            auto nextPtr = res.get()->next.get();
+            if (nextPtr.get() == nullptr) {
+                return {};
+            }
+            front.compareExchange(res.get(), nextPtr.copy());
+            res = front.getFast();
+        }
+
+        return { res.get()->data };
+    }
 } // namespace LFStructs
 
 #endif //ATOMIC_SHARED_POINTER_VTYULB_H
