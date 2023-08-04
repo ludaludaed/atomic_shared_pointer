@@ -2,8 +2,8 @@
 // Created by ludaludaed on 03.08.2023.
 //
 
-#ifndef ATOMIC_SHARED_POINTER_MY_MS_QUEUE_H
-#define ATOMIC_SHARED_POINTER_MY_MS_QUEUE_H
+#ifndef ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H
+#define ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H
 
 #include <optional>
 #include "../src/decl_fwd.h"
@@ -12,8 +12,11 @@ namespace lu {
     template <class TValue>
     class LockFreeQueue {
         struct Node {
-            AlignStorage<TValue> value{};
+            TValue value{};
             AtomicSharedPtr<Node> next{};
+
+            template <class... Args>
+            Node(Args &&... args) : value(std::forward<Args>(args)...) {}
         };
 
     public:
@@ -23,9 +26,8 @@ namespace lu {
             tail_.store(dummy);
         }
 
-        void push(const TValue& value) {
-            SharedPtr<Node> new_node = makeShared<Node>();
-            new_node->value.construct(value);
+        void push(const TValue &value) {
+            SharedPtr<Node> new_node = makeShared<Node>(value);
             SharedPtr<Node> cur_tail;
             while (true) {
                 cur_tail = tail_.load();
@@ -50,7 +52,7 @@ namespace lu {
                     return std::nullopt;
                 }
                 if (head_.compareExchange(cur_head, cur_head_next)) {
-                    return {std::move(*(cur_head_next->value))};
+                    return {std::move(cur_head_next->value)};
                 }
             }
         }
@@ -61,4 +63,4 @@ namespace lu {
     };
 } // namespace lu
 
-#endif //ATOMIC_SHARED_POINTER_MY_MS_QUEUE_H
+#endif //ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H

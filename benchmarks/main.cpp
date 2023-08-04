@@ -5,8 +5,8 @@
 #include <functional>
 #include "vtyulb.h"
 #include "std_atomic_sp.h"
-#include "my_stack.h"
-#include "my_ms_queue.h"
+#include "../structures/lock_free_stack.h"
+#include "../structures/lock_free_queue.h"
 
 template <typename TContainer>
 void stressTest(int actions, int threads) {
