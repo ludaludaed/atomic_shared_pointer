@@ -265,10 +265,7 @@ namespace lu {
         }
 
     private:
-        static ThreadEntryList<TValue, Allocator> list_;
+        static inline ThreadEntryList <TValue, Allocator> list_{};
     };
-
-    template <class TValue, class Destructor, class Allocator>
-    ThreadEntryList<TValue, Allocator> EntriesHolder<TValue, Destructor, Allocator>::list_ = {};
 } // namespace lu
 #endif //ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H
