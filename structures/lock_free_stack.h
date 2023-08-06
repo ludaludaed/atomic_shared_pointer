@@ -41,6 +41,6 @@ namespace lu {
     private:
         AtomicSharedPtr<Node> head_{};
     };
-}
+} // namespace lu
 
 #endif //ATOMIC_SHARED_POINTER_LOCK_FREE_STACK_H

@@ -157,7 +157,7 @@ namespace lu::detail {
         }
 
     private:
-        AlignStorage<TValue> value_;
+        AlignedStorage<TValue> value_;
         InternalAllocator allocator_;
     };
 

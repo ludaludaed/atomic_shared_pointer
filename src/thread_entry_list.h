@@ -268,4 +268,5 @@ namespace lu {
         static inline ThreadEntryList <TValue, Allocator> list_{};
     };
 } // namespace lu
+
 #endif //ATOMIC_SHARED_POINTER_THREAD_ENTRY_LIST_H

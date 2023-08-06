@@ -1,12 +1,12 @@
+#include "../structures/lock_free_queue.h"
+#include "../structures/lock_free_stack.h"
+#include "std_atomic_sp.h"
+#include "vtyulb.h"
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <thread>
 #include <vector>
-#include <functional>
-#include "vtyulb.h"
-#include "std_atomic_sp.h"
-#include "../structures/lock_free_stack.h"
-#include "../structures/lock_free_queue.h"
 
 template <typename TContainer>
 void stressTest(int actions, int threads) {
@@ -85,22 +85,26 @@ void abstractStressTest(const std::function<void(int, int)> &foo) {
 
 void stacksCompare() {
     std::cout << "__________________________________Stack compare__________________________________" << std::endl;
-    std::cout << std::endl << "from vtyulb:" << std::endl;
+    std::cout << std::endl
+              << "from vtyulb:" << std::endl;
     abstractStressTest(stressTest<LFStructs::LFStack<int>>);
-    std::cout << std::endl << "from std:" << std::endl;
+    std::cout << std::endl
+              << "from std:" << std::endl;
     abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
-    std::cout << std::endl << "from me:" << std::endl;
+    std::cout << std::endl
+              << "from me:" << std::endl;
     abstractStressTest(stressTest<lu::LockFreeStack<int>>);
     std::cout << std::endl;
 };
 
 void queueCompare() {
     std::cout << "__________________________________Queue compare__________________________________" << std::endl;
-//    std::cout << std::endl << "from vtyulb:" << std::endl;
-//    abstractStressTest(stressTest<LFStructs::LFQueue<int>>);
-//    std::cout << std::endl << "from std:" << std::endl;
-//    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
-    std::cout << std::endl << "from me:" << std::endl;
+    //    std::cout << std::endl << "from vtyulb:" << std::endl;
+    //    abstractStressTest(stressTest<LFStructs::LFQueue<int>>);
+    //    std::cout << std::endl << "from std:" << std::endl;
+    //    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
+    std::cout << std::endl
+              << "from me:" << std::endl;
     abstractStressTest(stressTest<lu::LockFreeQueue<int>>);
 };
 

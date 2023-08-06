@@ -9,7 +9,7 @@
 
 namespace lu {
     template <class TValue>
-    class AlignStorage {
+    class AlignedStorage {
     public:
         template <class... Args>
         void construct(Args &&... args) {
@@ -140,5 +140,6 @@ namespace lu {
             return pointer_;
         }
     };
-}
+} // namespace lu
+
 #endif //ATOMIC_SHARED_POINTER_UTILS_H
