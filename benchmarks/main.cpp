@@ -11,12 +11,12 @@
 template <typename TContainer>
 void stressTest(int actions, int threads) {
     std::vector<std::thread> workers;
+    workers.reserve(threads);
     std::vector<std::vector<int>> generated(threads);
     std::vector<std::vector<int>> extracted(threads);
     TContainer container;
-    std::atomic<int> initCount;
     for (int i = 0; i < threads; i++)
-        workers.push_back(std::thread([i, actions, &container, &generated, &extracted, threads]() {
+        workers.emplace_back([i, actions, &container, &generated, &extracted, threads]() {
             for (int j = 0; j < actions / threads; j++) {
                 if (rand() % 2) {
                     int a = rand();
@@ -29,7 +29,7 @@ void stressTest(int actions, int threads) {
                     }
                 }
             }
-        }));
+        });
 
     for (auto &thread: workers) {
         thread.join();
