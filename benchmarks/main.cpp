@@ -66,7 +66,8 @@ void stressTest(int actions, int threads) {
         assert(all_generated[i] == all_extracted[i]);
 }
 
-void abstractStressTest(const std::function<void(int, int)> &foo) {
+template<class Func>
+void abstractStressTest(Func &&func) {
     for (int i = 1; i <= std::thread::hardware_concurrency(); i++) {
         std::cout << "\t" << i;
     }
@@ -75,7 +76,7 @@ void abstractStressTest(const std::function<void(int, int)> &foo) {
         std::cout << i << "\t";
         for (int j = 1; j <= std::thread::hardware_concurrency(); j++) {
             std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-            foo(i, j);
+            func(i, j);
             std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
             std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "\t";
         }
