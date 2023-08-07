@@ -40,16 +40,14 @@ namespace lu {
         alignas(alignof(TValue)) std::byte data_[sizeof(TValue)];
     };
 
-    class DefaultDeleter {
-    public:
+    struct DefaultDeleter {
         template <class TValue>
         void operator()(TValue *value) {
             delete value;
         }
     };
 
-    class DefaultDestructor {
-    public:
+    struct DefaultDestructor {
         template <class TValue>
         void operator()(TValue *value) {
             value->~TValue();
