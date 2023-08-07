@@ -15,7 +15,7 @@ void stressTest(int actions, int threads) {
     std::vector<std::vector<int>> generated(threads);
     std::vector<std::vector<int>> extracted(threads);
     TContainer container;
-    for (int i = 0; i < threads; i++)
+    for (int i = 0; i < threads; i++) {
         workers.emplace_back([i, actions, &container, &generated, &extracted, threads]() {
             for (int j = 0; j < actions / threads; j++) {
                 if (rand() % 2) {
@@ -30,6 +30,7 @@ void stressTest(int actions, int threads) {
                 }
             }
         });
+    }
 
     for (auto &thread: workers) {
         thread.join();
@@ -62,11 +63,12 @@ void stressTest(int actions, int threads) {
 
     std::sort(all_generated.begin(), all_generated.end());
     std::sort(all_extracted.begin(), all_extracted.end());
-    for (int i = 0; i < all_extracted.size(); i++)
+    for (int i = 0; i < all_extracted.size(); i++) {
         assert(all_generated[i] == all_extracted[i]);
+    }
 }
 
-template<class Func>
+template <class Func>
 void abstractStressTest(Func &&func) {
     for (int i = 1; i <= std::thread::hardware_concurrency(); i++) {
         std::cout << "\t" << i;
