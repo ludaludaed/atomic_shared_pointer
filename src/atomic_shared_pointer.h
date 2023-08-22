@@ -65,6 +65,9 @@ namespace lu::detail {
 
         virtual void deleteThis() = 0;
 
+    public:
+        ControlBlockBase* Next{nullptr};
+
     private:
         std::atomic<size_t> ref_counter_;
         std::atomic<size_t> weak_counter_;
@@ -256,8 +259,24 @@ namespace lu::detail {
         }
 
         ~SharedPtr() {
-            if (control_block_ != nullptr) {
-                control_block_->decrementRef();
+            thread_local ControlBlockBase* head{nullptr};
+            thread_local bool in_progress {false};
+            
+            if (control_block_ == nullptr) {
+                return;
+            }
+
+            control_block_->Next = head;
+            head = control_block_;
+
+            if (!in_progress) {
+                in_progress = true;
+                while (head != nullptr) {
+                    auto delete_control_block = head;
+                    head = head->Next;
+                    delete_control_block->decrementRef();
+                }
+                in_progress = false;
             }
         }
 
@@ -532,10 +551,26 @@ namespace lu::detail {
         AtomicSharedPtr(AtomicSharedPtr &&) = delete;
 
         ~AtomicSharedPtr() {
+            thread_local ControlBlockBase* head{nullptr};
+            thread_local bool in_progress {false};
+
             auto ptr = control_block_.load();
-            if (ptr != nullptr) {
-                // Reclaimer::delayDecrementRef(ptr);
-                ptr->decrementRef();
+            
+            if (ptr == nullptr) {
+                return;
+            }
+
+            ptr->Next = head;
+            head = ptr;
+
+            if (!in_progress) {
+                in_progress = true;
+                while (head != nullptr) {
+                    auto delete_control_block = head;
+                    head = head->Next;
+                    delete_control_block->decrementRef();
+                }
+                in_progress = false;
             }
         }
 
