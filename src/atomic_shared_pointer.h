@@ -42,20 +42,8 @@ namespace lu::detail {
         }
 
         void decrementRef() {
-            thread_local ControlBlockBase *head{nullptr};
-            thread_local bool in_progress{false};
-
-            next_ = head;
-            head = this;
-
-            if (!in_progress) {
-                in_progress = true;
-                while (head != nullptr) {
-                    auto poped = head;
-                    head = head->next_;
-                    poped->internalDecrementRef();
-                }
-                in_progress = false;
+            if (ref_counter_.fetch_sub(1) == 1) {
+                safetyDestroy();
             }
         }
 
@@ -72,10 +60,22 @@ namespace lu::detail {
         virtual void *get() = 0;
 
     private:
-        void internalDecrementRef() {
-            if (ref_counter_.fetch_sub(1) == 1) {
-                destroy();
-                decrementWeakRef();
+        void safetyDestroy() {
+            thread_local ControlBlockBase *head{nullptr};
+            thread_local bool in_progress{false};
+
+            next_ = head;
+            head = this;
+
+            if (!in_progress) {
+                in_progress = true;
+                while (head != nullptr) {
+                    auto poped = head;
+                    head = head->next_;
+                    poped->destroy();
+                    poped->decrementWeakRef();
+                }
+                in_progress = false;
             }
         }
 
