@@ -81,7 +81,6 @@ void abstractStressTest(Func &&func) {
             func(i, j);
             std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
             std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "\t";
-            // lu::HazardPointers<lu::DefaultPolicy>::instance().forceScan();
         }
         std::cout << std::endl;
     }
