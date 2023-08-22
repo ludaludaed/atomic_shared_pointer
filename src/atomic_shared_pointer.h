@@ -425,8 +425,24 @@ namespace lu::detail {
         template <class TTValue>
         friend class SharedPtr;
 
+        template <class TTValue, class Reclaimer>
+        friend class AtomicWeakPtr;
+
     public:
         using element_type = TValue;
+
+    private:
+        // only for atomic shared pointer
+        explicit WeakPtr(ControlBlockBase *control_block)
+            : control_block_(control_block),
+              value_(reinterpret_cast<TValue *>(control_block->get())) {}
+
+        ControlBlockBase *release() {
+            auto old = control_block_;
+            control_block_ = nullptr;
+            value_ = nullptr;
+            return old;
+        }
 
     public:
         WeakPtr() = default;
@@ -600,6 +616,81 @@ namespace lu::detail {
             if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {
                 if (expected_ptr != nullptr) {
                     Reclaimer::delayDecrementRef(expected_ptr);
+                }
+                desired.release();
+                return true;
+            } else {
+                expected = std::move(load());
+                return false;
+            }
+        }
+
+    private:
+        std::atomic<ControlBlockBase *> control_block_;
+    };
+
+    template <class TValue, class Reclaimer>
+    class AtomicWeakPtr {
+    public:
+        static constexpr bool is_always_lock_free = true;
+
+    public:
+        AtomicWeakPtr() : control_block_(nullptr) {}
+
+        AtomicWeakPtr(const AtomicWeakPtr &) = delete;
+
+        AtomicWeakPtr(AtomicWeakPtr &&) = delete;
+
+        ~AtomicWeakPtr() {
+            auto ptr = control_block_.load();
+            if (ptr != nullptr) {
+                ptr->decrementWeakRef();
+            }
+        }
+
+        AtomicWeakPtr &operator=(const AtomicWeakPtr &) = delete;
+
+        AtomicWeakPtr &operator=(AtomicWeakPtr &&) = delete;
+
+        AtomicWeakPtr &operator=(WeakPtr<TValue> other) {
+            store(std::move(other));
+            return *this;
+        }
+
+        [[nodiscard]] bool is_lock_free() const noexcept {
+            return true;
+        }
+
+        void store(WeakPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst) {
+            ControlBlockBase *new_ptr = ptr.release();
+            ControlBlockBase *old_ptr = control_block_.exchange(new_ptr, order);
+            if (old_ptr != nullptr) {
+                Reclaimer::delayDecrementWeakRef(old_ptr);
+            }
+        }
+
+        WeakPtr<TValue> load() const {
+            auto guarded = Reclaimer::protect(control_block_);
+            if (guarded.get() == nullptr) {
+                return WeakPtr<TValue>{};
+            } else {
+                guarded->incrementWeakRef();
+                return WeakPtr<TValue>(guarded.get());
+            }
+        }
+
+        WeakPtr<TValue> exchange(WeakPtr<TValue> ptr, std::memory_order order = std::memory_order_seq_cst) {
+            ControlBlockBase *new_ptr = ptr.release();
+            ControlBlockBase *old_ptr = control_block_.exchange(new_ptr, order);
+            return WeakPtr<TValue>(old_ptr);
+        }
+
+        bool compareExchange(WeakPtr<TValue> &expected, WeakPtr<TValue> desired) {
+            ControlBlockBase *expected_ptr = expected.control_block_;
+            ControlBlockBase *desired_ptr = desired.control_block_;
+            if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {
+                if (expected_ptr != nullptr) {
+                    Reclaimer::delayDecrementWeakRef(expected_ptr);
                 }
                 desired.release();
                 return true;

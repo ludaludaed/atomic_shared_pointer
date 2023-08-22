@@ -23,6 +23,9 @@ namespace lu {
     template <class TValue, class Reclaimer = HPReclaimer<HPolicy<>>>
     using AtomicSharedPtr = detail::AtomicSharedPtr<TValue, Reclaimer>;
 
+    template <class TValue, class Reclaimer = HPReclaimer<HPolicy<>>>
+    using AtomicWeakPtr = detail::AtomicWeakPtr<TValue, Reclaimer>;
+
     template <typename TValue>
     using SharedPtr = detail::SharedPtr<TValue>;
 
