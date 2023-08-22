@@ -23,33 +23,44 @@ namespace lu::detail {
         ControlBlockBase &operator=(const ControlBlockBase &) = delete;
 
     public:
-        bool incrementNotZeroRef(size_t number_of_refs = 1) {
+        bool incrementNotZeroRef() {
             size_t ref_count = ref_counter_.load();
             while (ref_count != 0) {
-                if (ref_counter_.compare_exchange_strong(ref_count, ref_count + number_of_refs)) {
+                if (ref_counter_.compare_exchange_strong(ref_count, ref_count + 1)) {
                     return true;
                 }
             }
             return false;
         }
 
-        void incrementRef(size_t number_of_refs = 1) {
-            ref_counter_.fetch_add(number_of_refs);
+        void incrementRef() {
+            ref_counter_.fetch_add(1);
         }
 
-        void incrementWeakRef(size_t number_of_refs = 1) {
-            weak_counter_.fetch_add(number_of_refs);
+        void incrementWeakRef() {
+            weak_counter_.fetch_add(1);
         }
 
-        void decrementRef(size_t number_of_refs = 1) {
-            if (ref_counter_.fetch_sub(number_of_refs) == 1) {
-                destroy();
-                decrementWeakRef();
+        void decrementRef() {
+            thread_local ControlBlockBase *head{nullptr};
+            thread_local bool in_progress{false};
+
+            next_ = head;
+            head = this;
+
+            if (!in_progress) {
+                in_progress = true;
+                while (head != nullptr) {
+                    auto poped = head;
+                    head = head->next_;
+                    poped->internalDecrementRef();
+                }
+                in_progress = false;
             }
         }
 
-        void decrementWeakRef(size_t number_of_refs = 1) {
-            if (weak_counter_.fetch_sub(number_of_refs) == 1) {
+        void decrementWeakRef() {
+            if (weak_counter_.fetch_sub(1) == 1) {
                 deleteThis();
             }
         }
@@ -61,14 +72,19 @@ namespace lu::detail {
         virtual void *get() = 0;
 
     private:
+        void internalDecrementRef() {
+            if (ref_counter_.fetch_sub(1) == 1) {
+                destroy();
+                decrementWeakRef();
+            }
+        }
+
         virtual void destroy() = 0;
 
         virtual void deleteThis() = 0;
 
-    public:
-        ControlBlockBase* Next{nullptr};
-
     private:
+        ControlBlockBase *next_{nullptr};
         std::atomic<size_t> ref_counter_;
         std::atomic<size_t> weak_counter_;
     };
@@ -259,24 +275,8 @@ namespace lu::detail {
         }
 
         ~SharedPtr() {
-            thread_local ControlBlockBase* head{nullptr};
-            thread_local bool in_progress {false};
-            
-            if (control_block_ == nullptr) {
-                return;
-            }
-
-            control_block_->Next = head;
-            head = control_block_;
-
-            if (!in_progress) {
-                in_progress = true;
-                while (head != nullptr) {
-                    auto delete_control_block = head;
-                    head = head->Next;
-                    delete_control_block->decrementRef();
-                }
-                in_progress = false;
+            if (control_block_ != nullptr) {
+                control_block_->decrementRef();
             }
         }
 
@@ -551,26 +551,9 @@ namespace lu::detail {
         AtomicSharedPtr(AtomicSharedPtr &&) = delete;
 
         ~AtomicSharedPtr() {
-            thread_local ControlBlockBase* head{nullptr};
-            thread_local bool in_progress {false};
-
             auto ptr = control_block_.load();
-            
-            if (ptr == nullptr) {
-                return;
-            }
-
-            ptr->Next = head;
-            head = ptr;
-
-            if (!in_progress) {
-                in_progress = true;
-                while (head != nullptr) {
-                    auto delete_control_block = head;
-                    head = head->Next;
-                    delete_control_block->decrementRef();
-                }
-                in_progress = false;
+            if (ptr != nullptr) {
+                ptr->decrementRef();
             }
         }
 
