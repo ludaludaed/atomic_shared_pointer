@@ -81,6 +81,7 @@ void abstractStressTest(Func &&func) {
             func(i, j);
             std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
             std::cout << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "\t";
+            // lu::HazardPointers<lu::DefaultPolicy>::instance().forceScan();
         }
         std::cout << std::endl;
     }
@@ -88,12 +89,12 @@ void abstractStressTest(Func &&func) {
 
 void stacksCompare() {
     std::cout << "__________________________________Stack compare__________________________________" << std::endl;
-    std::cout << std::endl
-              << "from vtyulb:" << std::endl;
-    abstractStressTest(stressTest<LFStructs::LFStack<int>>);
-    std::cout << std::endl
-              << "from std:" << std::endl;
-    abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
+    // std::cout << std::endl
+    //           << "from vtyulb:" << std::endl;
+    // abstractStressTest(stressTest<LFStructs::LFStack<int>>);
+    // std::cout << std::endl
+    //           << "from std:" << std::endl;
+    // abstractStressTest(stressTest<std_atomic_sp::LockFreeStack<int>>);
     std::cout << std::endl
               << "from me:" << std::endl;
     abstractStressTest(stressTest<lu::LockFreeStack<int>>);

@@ -5,11 +5,11 @@
 #ifndef ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H
 #define ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H
 
+#include "thread_entry_list.h"
+#include <algorithm>
 #include <bitset>
 #include <cassert>
-#include <algorithm>
 #include <thread>
-#include "thread_entry_list.h"
 
 namespace lu::detail {
     using hazard_ptr_t = void *;
@@ -99,19 +99,18 @@ namespace lu::detail {
     class RetiredList {
     public:
         class RetiredPtr {
-            typedef void (*DisposerFunc )(retired_ptr_t);
+            typedef void (*DisposerFunc)(retired_ptr_t);
 
         public:
             RetiredPtr() = default;
 
             RetiredPtr(retired_ptr_t pointer, DisposerFunc dispose)
-                    : pointer_(pointer), disposer_(dispose) {}
+                : pointer_(pointer), disposer_(dispose) {}
 
             RetiredPtr(const RetiredPtr &other)
-                    : pointer_(other.pointer_), disposer_(other.disposer_) {}
+                : pointer_(other.pointer_), disposer_(other.disposer_) {}
 
-            RetiredPtr(RetiredPtr &&other)
-            noexcept: pointer_(other.pointer_), disposer_(other.disposer_) {
+            RetiredPtr(RetiredPtr &&other) noexcept : pointer_(other.pointer_), disposer_(other.disposer_) {
                 other.clear();
             }
 
@@ -202,6 +201,11 @@ namespace lu::detail {
         }
 
         void clear() {
+            for (auto ret_it = retires_; ret_it != last_; ++ret_it) {
+                if (*ret_it) {
+                    ret_it->dispose();
+                }
+            }
             last_ = retires_;
         }
 
@@ -274,8 +278,7 @@ namespace lu::detail {
 
             GuardedPtr(const GuardedPtr &) = delete;
 
-            GuardedPtr(GuardedPtr &&other)
-            noexcept: value_(other.value_), hazard_ptr_(other.hazard_ptr_) {
+            GuardedPtr(GuardedPtr &&other) noexcept : value_(other.value_), hazard_ptr_(other.hazard_ptr_) {
                 other.value_ = nullptr;
                 other.hazard_ptr_ = nullptr;
             }
@@ -395,21 +398,24 @@ namespace lu::detail {
         void clear() {
             for (auto it = entries_.begin(); it != entries_.end(); ++it) {
                 ThreadData &data = it->value();
-                for (auto ret_it = data.retires.begin(); ret_it != data.retires.end(); ++ret_it) {
-                    if (*ret_it) {
-                        ret_it->dispose();
-                    }
-                }
+                data.retires.clear();
             }
         }
 
-    private:
         void scan() {
             ThreadData &thread_data = entries_.getValue();
             scan(thread_data);
             helpScan(thread_data);
         }
 
+        void forceScan() {
+            ThreadData &thread_data = entries_.getValue();
+            while (!thread_data.retires.empty()) {
+                scan(thread_data);
+            }
+        }
+
+    private:
         void scan(ThreadData &thread_data) {
             if (thread_data.retires.empty()) {
                 return;
@@ -488,8 +494,8 @@ namespace lu::detail {
         }
 
     private:
-        EntriesHolder <ThreadData, DestructThreadEntry, Allocator> entries_{};
+        EntriesHolder<ThreadData, DestructThreadEntry, Allocator> entries_{};
     };
-} // namespace lu::detail
+}// namespace lu::detail
 
-#endif //ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H
+#endif//ATOMIC_SHARED_POINTER_HAZARD_POINTER_DOMAIN_H

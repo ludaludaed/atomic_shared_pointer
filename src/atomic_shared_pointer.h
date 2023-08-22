@@ -534,7 +534,8 @@ namespace lu::detail {
         ~AtomicSharedPtr() {
             auto ptr = control_block_.load();
             if (ptr != nullptr) {
-                Reclaimer::delayDecrementRef(ptr);
+                // Reclaimer::delayDecrementRef(ptr);
+                ptr->decrementRef();
             }
         }
 
