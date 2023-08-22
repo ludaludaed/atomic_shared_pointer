@@ -408,13 +408,6 @@ namespace lu::detail {
             helpScan(thread_data);
         }
 
-        void forceScan() {
-            ThreadData &thread_data = entries_.getValue();
-            while (!thread_data.retires.empty()) {
-                scan(thread_data);
-            }
-        }
-
     private:
         void scan(ThreadData &thread_data) {
             if (thread_data.retires.empty()) {
