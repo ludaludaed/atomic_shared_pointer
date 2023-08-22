@@ -5,9 +5,9 @@
 #ifndef ATOMIC_SHARED_POINTER_ATOMIC_SHARED_POINTER_H
 #define ATOMIC_SHARED_POINTER_ATOMIC_SHARED_POINTER_H
 
+#include "utils.h"
 #include <atomic>
 #include <memory>
-#include "utils.h"
 
 
 namespace lu::detail {
@@ -70,17 +70,17 @@ namespace lu::detail {
         std::atomic<size_t> weak_counter_;
     };
 
-    template <class TValue, class Deleter = DefaultDeleter, class Allocator = std::allocator<TValue>>
+    template <class TValue, class Deleter, class Allocator>
     class ControlBlock : public ControlBlockBase {
     private:
         using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<ControlBlock>;
 
     public:
         explicit ControlBlock(TValue *value, Deleter deleter, const Allocator &allocator)
-                : ControlBlockBase(),
-                  value_(value),
-                  deleter_(std::move(deleter)),
-                  allocator_(allocator) {}
+            : ControlBlockBase(),
+              value_(value),
+              deleter_(std::move(deleter)),
+              allocator_(allocator) {}
 
         ~ControlBlock() override = default;
 
@@ -116,16 +116,17 @@ namespace lu::detail {
         InternalAllocator allocator_;
     };
 
-    template <class TValue, class Allocator = std::allocator<TValue>>
+    template <class TValue, class Destructor, class Allocator>
     class InplaceControlBlock : public ControlBlockBase {
     private:
         using InternalAllocator = typename std::allocator_traits<Allocator>::template rebind_alloc<InplaceControlBlock>;
 
     public:
         template <class... Args>
-        explicit InplaceControlBlock(const Allocator &allocator, Args &&... args)
-                : ControlBlockBase(),
-                  allocator_(allocator) {
+        explicit InplaceControlBlock(Destructor destructor, const Allocator &allocator, Args &&...args)
+            : ControlBlockBase(),
+              destructor_(std::move(destructor)),
+              allocator_(allocator) {
             value_.construct(std::forward<Args>(args)...);
         }
 
@@ -136,17 +137,17 @@ namespace lu::detail {
         }
 
         template <class... Args>
-        static InplaceControlBlock *create(const Allocator &allocator, Args &&... args) {
+        static InplaceControlBlock *create(Destructor destructor, const Allocator &allocator, Args &&...args) {
             InternalAllocator internal_allocator(allocator);
             AllocateGuard allocation(internal_allocator);
             allocation.allocate();
-            allocation.construct(allocator, std::forward<Args>(args)...);
+            allocation.construct(std::move(destructor), allocator, std::forward<Args>(args)...);
             return allocation.release();
         }
 
     private:
         void destroy() override {
-            value_.destruct();
+            destructor_(&value_);
         }
 
         void deleteThis() override {
@@ -158,6 +159,7 @@ namespace lu::detail {
 
     private:
         AlignedStorage<TValue> value_;
+        Destructor destructor_;
         InternalAllocator allocator_;
     };
 
@@ -169,23 +171,20 @@ namespace lu::detail {
 
     template <class TValue>
     class SharedPtr {
-        template <class TTValue, class Allocator, class ...Args>
-        friend SharedPtr<TTValue> allocateShared(const Allocator &allocator, Args &&... args);
+        template <class TTValue, class Allocator, class... Args>
+        friend SharedPtr<TTValue> allocateShared(const Allocator &allocator, Args &&...args);
 
-        template <class TTValue, class ...Args>
-        friend SharedPtr<TTValue> makeShared(Args &&... args);
-
-        template <class TTValue>
-        friend
-        class WeakPtr;
+        template <class TTValue, class... Args>
+        friend SharedPtr<TTValue> makeShared(Args &&...args);
 
         template <class TTValue>
-        friend
-        class SharedPtr;
+        friend class WeakPtr;
+
+        template <class TTValue>
+        friend class SharedPtr;
 
         template <class TTValue, class Reclaimer>
-        friend
-        class AtomicSharedPtr;
+        friend class AtomicSharedPtr;
 
     public:
         using element_type = TValue;
@@ -193,8 +192,8 @@ namespace lu::detail {
     private:
         // only for atomic shared pointer
         explicit SharedPtr(ControlBlockBase *control_block)
-                : control_block_(control_block),
-                  value_(reinterpret_cast<TValue *>(control_block->get())) {}
+            : control_block_(control_block),
+              value_(reinterpret_cast<TValue *>(control_block->get())) {}
 
         ControlBlockBase *release() {
             auto old = control_block_;
@@ -222,7 +221,7 @@ namespace lu::detail {
         }
 
         SharedPtr(const SharedPtr &other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             if (control_block_ != nullptr) {
                 control_block_->incrementRef();
             }
@@ -230,21 +229,20 @@ namespace lu::detail {
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         SharedPtr(const SharedPtr<TTValue> &other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             if (control_block_ != nullptr) {
                 control_block_->incrementRef();
             }
         }
 
-        SharedPtr(SharedPtr &&other)
-        noexcept: control_block_(other.control_block_), value_(other.value_) {
+        SharedPtr(SharedPtr &&other) noexcept : control_block_(other.control_block_), value_(other.value_) {
             other.control_block_ = nullptr;
             other.value_ = nullptr;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         SharedPtr(SharedPtr<TTValue> &&other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             other.control_block_ = nullptr;
             other.value_ = nullptr;
         }
@@ -386,29 +384,27 @@ namespace lu::detail {
         TValue *value_{nullptr};
     };
 
-    template <class TValue, class Allocator, class ...Args>
-    SharedPtr<TValue> allocateShared(const Allocator &allocator, Args &&... args) {
-        using ControlBlock = InplaceControlBlock<TValue, Allocator>;
-        auto control_block = ControlBlock::create(allocator, std::forward<Args>(args)...);
+    template <class TValue, class Allocator, class... Args>
+    SharedPtr<TValue> allocateShared(const Allocator &allocator, Args &&...args) {
+        using ControlBlock = InplaceControlBlock<TValue, DefaultDestructor, Allocator>;
+        auto control_block = ControlBlock::create(DefaultDestructor{}, allocator, std::forward<Args>(args)...);
         SharedPtr<TValue> result;
         result.setPointers(reinterpret_cast<TValue *>(control_block->get()), control_block);
         return std::move(result);
     }
 
     template <class TValue, class... Args>
-    SharedPtr<TValue> makeShared(Args &&... args) {
+    SharedPtr<TValue> makeShared(Args &&...args) {
         return std::move(allocateShared<TValue>(std::allocator<TValue>{}, std::forward<Args>(args)...));
     }
 
     template <class TValue>
     class WeakPtr {
         template <class TTValue>
-        friend
-        class WeakPtr;
+        friend class WeakPtr;
 
         template <class TTValue>
-        friend
-        class SharedPtr;
+        friend class SharedPtr;
 
     public:
         using element_type = TValue;
@@ -418,14 +414,14 @@ namespace lu::detail {
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         explicit WeakPtr(const SharedPtr<TTValue> &other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             if (control_block_ != nullptr) {
                 control_block_->incrementWeakRef();
             }
         }
 
         WeakPtr(const WeakPtr &other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             if (control_block_ != nullptr) {
                 control_block_->incrementWeakRef();
             }
@@ -433,21 +429,20 @@ namespace lu::detail {
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         WeakPtr(const WeakPtr<TTValue> &other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             if (control_block_ != nullptr) {
                 control_block_->incrementWeakRef();
             }
         }
 
-        WeakPtr(WeakPtr &&other)
-        noexcept: control_block_(other.control_block_), value_(other.value_) {
+        WeakPtr(WeakPtr &&other) noexcept : control_block_(other.control_block_), value_(other.value_) {
             other.control_block_ = nullptr;
             other.value_ = nullptr;
         }
 
         template <class TTValue, std::enable_if_t<std::is_convertible_v<TTValue *, TValue *>, int> = 0>
         WeakPtr(WeakPtr<TTValue> &&other)
-                : control_block_(other.control_block_), value_(other.value_) {
+            : control_block_(other.control_block_), value_(other.value_) {
             other.control_block_ = nullptr;
             other.value_ = nullptr;
         }
@@ -598,7 +593,7 @@ namespace lu::detail {
     private:
         std::atomic<ControlBlockBase *> control_block_;
     };
-} // namespace lu::detail
+}// namespace lu::detail
 
 
-#endif //ATOMIC_SHARED_POINTER_ATOMIC_SHARED_POINTER_H
+#endif//ATOMIC_SHARED_POINTER_ATOMIC_SHARED_POINTER_H

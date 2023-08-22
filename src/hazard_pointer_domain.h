@@ -347,14 +347,7 @@ namespace lu::detail {
         HazardPointerDomain &operator=(HazardPointerDomain &&) = delete;
 
         ~HazardPointerDomain() {
-            for (auto it = entries_.begin(); it != entries_.end(); ++it) {
-                ThreadData &data = it->value();
-                for (auto ret_it = data.retires.begin(); ret_it != data.retires.end(); ++ret_it) {
-                    if (*ret_it) {
-                        ret_it->dispose();
-                    }
-                }
-            }
+            clear();
         }
 
         static HazardPointerDomain &instance() {
@@ -399,6 +392,17 @@ namespace lu::detail {
             thread_data.retires.pushBack(std::move(retired));
         }
 
+        void clear() {
+            for (auto it = entries_.begin(); it != entries_.end(); ++it) {
+                ThreadData &data = it->value();
+                for (auto ret_it = data.retires.begin(); ret_it != data.retires.end(); ++ret_it) {
+                    if (*ret_it) {
+                        ret_it->dispose();
+                    }
+                }
+            }
+        }
+
     private:
         void scan() {
             ThreadData &thread_data = entries_.getValue();
@@ -437,10 +441,16 @@ namespace lu::detail {
                     it->dispose();
                 } else {
                     if (ret_insert != it) {
-                        *ret_insert = *it;
+                        *ret_insert = std::move(*it);
                     }
                     ret_insert += 1;
                 }
+            }
+            for (auto it = ret_end; it != thread_data.retires.end(); ++it) {
+                if (ret_insert != it) {
+                    *ret_insert = std::move(*it);
+                }
+                ret_insert += 1;
             }
             thread_data.retires.setLast(ret_insert);
         }

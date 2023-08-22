@@ -3,4 +3,6 @@
 /build
 /.idea
 /.vscode
+/out/
+/.vs
 .clang-format

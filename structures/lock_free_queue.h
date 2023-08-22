@@ -5,18 +5,19 @@
 #ifndef ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H
 #define ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H
 
-#include <optional>
 #include "../src/decl_fwd.h"
+#include <optional>
 
 namespace lu {
     template <class TValue>
     class LockFreeQueue {
+    public:
         struct Node {
             TValue value{};
             AtomicSharedPtr<Node> next{};
 
             template <class... Args>
-            Node(Args &&... args) : value(std::forward<Args>(args)...) {}
+            Node(Args &&...args) : value(std::forward<Args>(args)...) {}
         };
 
     public:
@@ -61,6 +62,6 @@ namespace lu {
         AtomicSharedPtr<Node> head_;
         AtomicSharedPtr<Node> tail_;
     };
-} // namespace lu
+}// namespace lu
 
-#endif //ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H
+#endif//ATOMIC_SHARED_POINTER_LOCK_FREE_QUEUE_H
