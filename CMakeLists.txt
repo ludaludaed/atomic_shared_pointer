@@ -10,7 +10,6 @@ add_executable(atomic_shared_pointer
         src/utils.h
         src/hazard_pointer_domain.h
         src/thread_entry_list.h
-        src/hazard_ptr_reclaimer.h
         src/decl_fwd.h
         benchmarks/std_atomic_sp.h
         structures/lock_free_stack.h
