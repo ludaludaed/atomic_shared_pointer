@@ -553,9 +553,43 @@ namespace lu::detail {
         TValue *value_{nullptr};
     };
 
+    template <class Reclaimer>
+    class ReclaimerTraits {
+    public:
+        using Domain = Reclaimer;
+
+        using GuardedPtr = typename Domain::template GuardedPtr<ControlBlockBase>;
+
+        static GuardedPtr protect(const std::atomic<ControlBlockBase *> &ptr) {
+            return reclaimer.protect(ptr);
+        }
+
+        static void delayDecrementRef(ControlBlockBase *control_block) {
+            struct Disposer {
+                void operator()(ControlBlockBase *control_block) const {
+                    control_block->decrementRef();
+                }
+            };
+            reclaimer.template retire<Disposer>(control_block);
+        }
+
+        static void delayDecrementWeakRef(ControlBlockBase *control_block) {
+            struct Disposer {
+                void operator()(ControlBlockBase *control_block) const {
+                    control_block->decrementWeakRef();
+                }
+            };
+            reclaimer.template retire<Disposer>(control_block);
+        }
+
+    private:
+        static inline Domain &reclaimer = Domain::instance();
+    };
 
     template <class TValue, class Reclaimer>
     class AtomicSharedPtr {
+        using InternalReclaimer = ReclaimerTraits<Reclaimer>;
+
     public:
         static constexpr bool is_always_lock_free = true;
 
@@ -590,12 +624,12 @@ namespace lu::detail {
             ControlBlockBase *new_ptr = ptr.release();
             ControlBlockBase *old_ptr = control_block_.exchange(new_ptr, order);
             if (old_ptr != nullptr) {
-                Reclaimer::delayDecrementRef(old_ptr);
+                InternalReclaimer::delayDecrementRef(old_ptr);
             }
         }
 
         SharedPtr<TValue> load() const {
-            auto guarded = Reclaimer::protect(control_block_);
+            auto guarded = InternalReclaimer::protect(control_block_);
             if (guarded.get() == nullptr) {
                 return SharedPtr<TValue>{};
             } else {
@@ -615,7 +649,7 @@ namespace lu::detail {
             ControlBlockBase *desired_ptr = desired.control_block_;
             if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {
                 if (expected_ptr != nullptr) {
-                    Reclaimer::delayDecrementRef(expected_ptr);
+                    InternalReclaimer::delayDecrementRef(expected_ptr);
                 }
                 desired.release();
                 return true;
@@ -631,6 +665,8 @@ namespace lu::detail {
 
     template <class TValue, class Reclaimer>
     class AtomicWeakPtr {
+        using InternalReclaimer = ReclaimerTraits<Reclaimer>;
+
     public:
         static constexpr bool is_always_lock_free = true;
 
@@ -665,12 +701,12 @@ namespace lu::detail {
             ControlBlockBase *new_ptr = ptr.release();
             ControlBlockBase *old_ptr = control_block_.exchange(new_ptr, order);
             if (old_ptr != nullptr) {
-                Reclaimer::delayDecrementWeakRef(old_ptr);
+                InternalReclaimer::delayDecrementWeakRef(old_ptr);
             }
         }
 
         WeakPtr<TValue> load() const {
-            auto guarded = Reclaimer::protect(control_block_);
+            auto guarded = InternalReclaimer::protect(control_block_);
             if (guarded.get() == nullptr) {
                 return WeakPtr<TValue>{};
             } else {
@@ -690,7 +726,7 @@ namespace lu::detail {
             ControlBlockBase *desired_ptr = desired.control_block_;
             if (control_block_.compare_exchange_strong(expected_ptr, desired_ptr)) {
                 if (expected_ptr != nullptr) {
-                    Reclaimer::delayDecrementWeakRef(expected_ptr);
+                    InternalReclaimer::delayDecrementWeakRef(expected_ptr);
                 }
                 desired.release();
                 return true;

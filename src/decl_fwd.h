@@ -7,7 +7,6 @@
 
 #include "atomic_shared_pointer.h"
 #include "hazard_pointer_domain.h"
-#include "hazard_ptr_reclaimer.h"
 #include "thread_entry_list.h"
 
 namespace lu {
@@ -15,15 +14,12 @@ namespace lu {
     using HPolicy = detail::HazardPointersGenericPolicy<MaxHP, MaxRetired, ScanDelay>;
 
     template <class Policy, class Allocator = std::allocator<std::byte>>
-    using HPReclaimer = HazardPtrReclaimer<Policy, Allocator>;
-
-    template <class Policy, class Allocator = std::allocator<std::byte>>
     using HazardPointers = detail::HazardPointerDomain<Policy, Allocator>;
 
-    template <class TValue, class Reclaimer = HPReclaimer<HPolicy<>>>
+    template <class TValue, class Reclaimer = HazardPointers<HPolicy<>>>
     using AtomicSharedPtr = detail::AtomicSharedPtr<TValue, Reclaimer>;
 
-    template <class TValue, class Reclaimer = HPReclaimer<HPolicy<>>>
+    template <class TValue, class Reclaimer = HazardPointers<HPolicy<>>>
     using AtomicWeakPtr = detail::AtomicWeakPtr<TValue, Reclaimer>;
 
     template <typename TValue>
@@ -35,6 +31,6 @@ namespace lu {
     using detail::allocateShared;
 
     using detail::makeShared;
-}
+}// namespace lu
 
-#endif //ATOMIC_SHARED_POINTER_DECL_FWD_H
+#endif//ATOMIC_SHARED_POINTER_DECL_FWD_H
