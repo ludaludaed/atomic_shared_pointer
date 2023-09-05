@@ -23,32 +23,32 @@ namespace lu::detail {
         ControlBlockBase &operator=(const ControlBlockBase &) = delete;
 
     public:
-        bool incrementNotZeroRef() {
+        bool incrementNotZeroRef(size_t num_of_refs = 1) {
             size_t ref_count = ref_counter_.load();
             while (ref_count != 0) {
-                if (ref_counter_.compare_exchange_strong(ref_count, ref_count + 1)) {
+                if (ref_counter_.compare_exchange_strong(ref_count, ref_count + num_of_refs)) {
                     return true;
                 }
             }
             return false;
         }
 
-        void incrementRef() {
-            ref_counter_.fetch_add(1);
+        void incrementRef(size_t num_of_refs = 1) {
+            ref_counter_.fetch_add(num_of_refs);
         }
 
-        void incrementWeakRef() {
-            weak_counter_.fetch_add(1);
+        void incrementWeakRef(size_t num_of_refs = 1) {
+            weak_counter_.fetch_add(num_of_refs);
         }
 
-        void decrementRef() {
-            if (ref_counter_.fetch_sub(1) == 1) {
+        void decrementRef(size_t num_of_refs = 1) {
+            if (ref_counter_.fetch_sub(num_of_refs) <= num_of_refs) {
                 safetyDestroy();
             }
         }
 
-        void decrementWeakRef() {
-            if (weak_counter_.fetch_sub(1) == 1) {
+        void decrementWeakRef(size_t num_of_refs = 1) {
+            if (weak_counter_.fetch_sub(num_of_refs) <= num_of_refs) {
                 deleteThis();
             }
         }
