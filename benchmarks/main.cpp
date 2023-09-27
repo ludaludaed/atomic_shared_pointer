@@ -109,14 +109,7 @@ void queueCompare() {
 };
 
 int main() {
-     stacksCompare();
-     queueCompare();
-//    for (uintptr_t i = 0; i < 10; ++i) {
-//        if (!(i & 1)) {
-//            std::cout << i << " YES" << std::endl;
-//        } else {
-//            std::cout << i << " NO" << std::endl;
-//        }
-//    }
+    stacksCompare();
+    queueCompare();
     return 0;
 }
