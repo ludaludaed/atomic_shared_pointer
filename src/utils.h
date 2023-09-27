@@ -6,13 +6,14 @@
 #define ATOMIC_SHARED_POINTER_UTILS_H
 
 #include <memory>
+#include <utility>
 
 namespace lu {
     template <class TValue>
     class AlignedStorage {
     public:
         template <class... Args>
-        void construct(Args &&... args) {
+        void construct(Args &&...args) {
             ::new(data_) TValue(std::forward<Args>(args)...);
         }
 
@@ -120,7 +121,7 @@ namespace lu {
         }
 
         template <class... Args>
-        void construct(Args &&... args) {
+        void construct(Args &&...args) {
             AllocatorTraits::construct(allocator_, pointer_, std::forward<Args>(args)...);
         }
 
@@ -138,6 +139,6 @@ namespace lu {
             return pointer_;
         }
     };
-} // namespace lu
+}// namespace lu
 
-#endif //ATOMIC_SHARED_POINTER_UTILS_H
+#endif//ATOMIC_SHARED_POINTER_UTILS_H
