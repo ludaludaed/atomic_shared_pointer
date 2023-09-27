@@ -10,6 +10,7 @@
 #include <bitset>
 #include <cassert>
 #include <thread>
+#include "utils.h"
 
 namespace lu::detail {
     using hazard_ptr_t = void *;
@@ -105,12 +106,12 @@ namespace lu::detail {
             RetiredPtr() = default;
 
             RetiredPtr(retired_ptr_t pointer, DisposerFunc dispose)
-                : pointer_(pointer), disposer_(dispose) {}
+                    : pointer_(pointer), disposer_(dispose) {}
 
             RetiredPtr(const RetiredPtr &other)
-                : pointer_(other.pointer_), disposer_(other.disposer_) {}
+                    : pointer_(other.pointer_), disposer_(other.disposer_) {}
 
-            RetiredPtr(RetiredPtr &&other) noexcept : pointer_(other.pointer_), disposer_(other.disposer_) {
+            RetiredPtr(RetiredPtr &&other) noexcept: pointer_(other.pointer_), disposer_(other.disposer_) {
                 other.clear();
             }
 
@@ -278,7 +279,7 @@ namespace lu::detail {
 
             GuardedPtr(const GuardedPtr &) = delete;
 
-            GuardedPtr(GuardedPtr &&other) noexcept : value_(other.value_), hazard_ptr_(other.hazard_ptr_) {
+            GuardedPtr(GuardedPtr &&other) noexcept: value_(other.value_), hazard_ptr_(other.hazard_ptr_) {
                 other.value_ = nullptr;
                 other.hazard_ptr_ = nullptr;
             }
@@ -301,7 +302,7 @@ namespace lu::detail {
             }
 
             explicit operator bool() const {
-                return hazard_ptr_ != nullptr;
+                return value_ != nullptr;
             }
 
             TValue &operator*() {
@@ -385,6 +386,8 @@ namespace lu::detail {
                     Disposer()(reinterpret_cast<TValue *>(value));
                 }
             };
+            assert(ptr != nullptr && "Pointer cannot be nullptr");
+            assert(!(reinterpret_cast<uintptr_t>(ptr) & 1) && "Unaligned address");
             ThreadData &thread_data = entries_.getValue();
             // TODO: Maybe dead-lock if T * HP > R
             while (thread_data.retires.full()) {
@@ -487,7 +490,7 @@ namespace lu::detail {
         }
 
     private:
-        EntriesHolder<ThreadData, DestructThreadEntry, Allocator> entries_{};
+        EntriesHolder <ThreadData, DestructThreadEntry, Allocator> entries_{};
     };
 }// namespace lu::detail
 
