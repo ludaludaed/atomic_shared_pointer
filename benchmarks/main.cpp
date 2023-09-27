@@ -109,7 +109,7 @@ void queueCompare() {
 };
 
 int main() {
-     stacksCompare();
-     queueCompare();
+    stacksCompare();
+    queueCompare();
     return 0;
 }
